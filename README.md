@@ -1,25 +1,71 @@
-# Needle / MyTorch
+# MyTorch
 
-An educational deep-learning framework based on the 10-714 Needle homework.
-The repository combines the broader Needle backend and sequence-model support
-with the useful CNN additions from the former `my_conv_proj` implementation.
+MyTorch is a compact educational deep-learning framework built around an
+explicit `TensorOp.compute` / `TensorOp.gradient` computation graph. NumPy is
+the baseline CPU backend; CuPy provides an optional, lazily loaded CUDA array
+backend. PyTorch is not a runtime dependency.
 
-## Layout
+## Install
 
-- `python/needle`: tensors, automatic differentiation, operators, modules,
-  optimizers, data loading, and NumPy/native backends
-- `apps`: MNIST, CIFAR-10, and language-model examples
-- `tests`: operator, backend, data, convolution, pooling, and sequence tests
-- `src`: C++ CPU and CUDA ndarray backends
-- `data`: local datasets used by the examples
+CPU development environment:
 
-## Merged CNN features
+```bash
+pip install -e ".[dev]"
+```
 
-- PyTorch-style `nn.Conv2d` with configurable integer padding (`nn.Conv` remains valid)
-- `nn.MaxPool2d` and `nn.AvgPool2d`
-- differentiable `ops.pad` and `ops.logsoftmax`
-- `MNISTConvNet`, a pooling-based CNN example in `apps/lenet5.py`
+Optional NVIDIA CUDA 12 support:
 
-The pure NumPy ndarray backend works without compilation. Run `make` on a
-supported Unix-like environment to build the optimized CPU backend and the
-optional CUDA backend.
+```bash
+pip install -e ".[dev,cuda]"
+```
+
+The CUDA extra installs CuPy plus CUDA runtime/NVRTC component wheels; an
+NVIDIA driver is still required. Apple Silicon cannot run the CUDA/CuPy path;
+use the NumPy CPU backend there.
+
+## Quick start
+
+```python
+import numpy as np
+import mytorch as mt
+
+x = mt.Tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
+loss = (x * x).sum()
+loss.backward()
+
+print(loss.numpy())   # 14.0
+print(x.grad.numpy()) # [2. 4. 6.]
+```
+
+Device transfers are explicit:
+
+```python
+x_cpu = mt.Tensor([1, 2, 3], dtype="float32")
+if mt.is_cuda_available():
+    x_gpu = x_cpu.cuda(0)
+    x_cpu_again = x_gpu.cpu()
+```
+
+## Examples
+
+The MNIST entry points do not download data automatically:
+
+```bash
+python -m apps.mlp_mnist --help
+python -m apps.lenet5_mnist --help
+```
+
+Expected files are under `data/MNIST/raw/`. Unit tests use synthetic inputs and
+do not require the dataset.
+
+## Repository layout
+
+- `mytorch/`: canonical framework and NumPy/CuPy device API
+- `apps/`: canonical runnable examples
+- `tests/`: canonical CPU/CUDA tests
+- `docs/`: architecture and migration notes
+- `MyTorch_分阶段迁移_Codex任务书.md`: staged V0-V12 migration plan
+
+The framework is adapted from the MIT-licensed Needle educational project and
+the earlier `GuoGuo614/MyTorch-1` interface design. See `LICENSE` and the
+architecture boundary document for scope details.

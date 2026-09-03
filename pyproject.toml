@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mytorch-edu"
+version = "0.1.0"
+description = "A small TensorOp-based deep learning framework for teaching"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "GuoGuo614"}]
+dependencies = ["numpy>=1.23"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov>=4"]
+cuda = [
+    "cupy-cuda12x>=13",
+    "nvidia-cuda-runtime-cu12>=12,<13",
+    "nvidia-cuda-nvrtc-cu12>=12,<13",
+]
+triton = ["triton>=2.1; platform_system == 'Linux'"]
+dashboard = ["fastapi>=0.110", "uvicorn>=0.27"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mytorch*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
