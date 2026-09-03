@@ -11,7 +11,8 @@ V2 keeps one operator implementation per API and selects NumPy or CuPy from
 the input array. Module migration is recursive, optimizer state follows its
 parameter device, and only explicit transfers or reporting through
 `Tensor.numpy()` may copy CUDA data to the host. The convolution implementation
-in this stage is a correctness baseline; kernel optimization belongs to V3.
+uses separately testable naive and bounded im2col paths. Triton and custom CUDA
+kernels remain outside V3.
 
 ## Removed legacy framework
 

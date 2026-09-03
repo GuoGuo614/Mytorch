@@ -65,6 +65,22 @@ python -m apps.lenet5_mnist --help
 python -m examples.device_smoke
 ```
 
+Conv2d supports `implementation="naive"`, `"im2col"`, or `"auto"`. The
+default `auto` path currently selects bounded-memory im2col when supported:
+
+```python
+conv = mt.nn.Conv2d(3, 16, 3, padding=1, implementation="auto")
+```
+
+Run the V3 benchmark without writing result files:
+
+```bash
+python -m benchmarks.bench_conv --device cpu
+python -m benchmarks.bench_conv --device cuda
+```
+
+See `docs/conv2d.md` for layout, output-shape, selection, and memory details.
+
 Expected files are under `data/MNIST/raw/`. Unit tests use synthetic inputs and
 do not require the dataset.
 
@@ -73,6 +89,7 @@ do not require the dataset.
 - `mytorch/`: canonical framework and NumPy/CuPy device API
 - `apps/`: canonical runnable examples
 - `examples/`: small backend and migration smoke programs
+- `benchmarks/`: reproducible command-line microbenchmarks
 - `tests/`: canonical CPU/CUDA tests
 - `docs/`: architecture and migration notes
 - `MyTorch_分阶段迁移_Codex任务书.md`: staged V0-V12 migration plan

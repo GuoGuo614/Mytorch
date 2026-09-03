@@ -343,24 +343,41 @@ class Residual(Module):
         return self.fn(x) + x
 
 class Conv2d(Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, bias: bool = True, device: Optional[Any] = None, dtype: str = "float32") -> None:
+    """NCHW convolution with OIHW weights."""
+
+    def __init__(self, in_channels: int, out_channels: int, kernel_size,
+                 stride=1, padding=0, bias: bool = True,
+                 device: Optional[Any] = None, dtype: str = "float32",
+                 implementation: str = "auto",
+                 max_im2col_bytes: int = ops.DEFAULT_IM2COL_MAX_BYTES) -> None:
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
+        self.implementation = implementation
+        self.max_im2col_bytes = max_im2col_bytes
+        self.last_implementation = None
+        self.last_chunk_rows = None
 
         kwargs = {'device': device, 'dtype': dtype}
         self.has_bias = bias
 
         # Weight shape: (out_channels, in_channels, kernel_size, kernel_size)
-        fan_in = in_channels * kernel_size * kernel_size
-        fan_out = out_channels * kernel_size * kernel_size
+        if isinstance(kernel_size, int):
+            kernel_h, kernel_w = kernel_size, kernel_size
+        elif isinstance(kernel_size, (tuple, list)) and len(kernel_size) == 2:
+            kernel_h, kernel_w = int(kernel_size[0]), int(kernel_size[1])
+        else:
+            raise TypeError("kernel_size must be an int or a pair of ints")
+        if kernel_h <= 0 or kernel_w <= 0:
+            raise ValueError("kernel_size values must be positive")
+        fan_in = in_channels * kernel_h * kernel_w
 
         # 直接创建正确形状的权重
         bound = math.sqrt(6.0 / fan_in)
-        self.weight = Parameter(init.rand(out_channels, in_channels, kernel_size, kernel_size,
+        self.weight = Parameter(init.rand(out_channels, in_channels, kernel_h, kernel_w,
                                          low=-bound, high=bound, **kwargs))
 
         if bias:
@@ -370,10 +387,27 @@ class Conv2d(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         # x shape: (batch_size, in_channels, height, width)
-        if self.padding > 0:
-            x = ops.pad(x, ((0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)))
+        if isinstance(self.padding, int):
+            padding = (self.padding, self.padding)
+        else:
+            padding = tuple(self.padding)
+        if len(padding) != 2 or min(padding) < 0:
+            raise ValueError("padding must be a non-negative int or pair")
+        if padding != (0, 0):
+            x = ops.pad(
+                x,
+                ((0, 0), (0, 0), (padding[0], padding[0]),
+                 (padding[1], padding[1])),
+            )
 
-        result = ops.conv2d(x, self.weight, stride=self.stride)
+        conv_op = ops.Conv2d(
+            stride=self.stride,
+            implementation=self.implementation,
+            max_im2col_bytes=self.max_im2col_bytes,
+        )
+        result = conv_op(x, self.weight)
+        self.last_implementation = conv_op.selected_implementation
+        self.last_chunk_rows = conv_op.chunk_rows
 
         if self.has_bias:
             bias = ops.broadcast_to(self.bias, result.shape)
