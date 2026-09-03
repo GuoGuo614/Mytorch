@@ -46,6 +46,15 @@ if mt.is_cuda_available():
     x_cpu_again = x_gpu.cpu()
 ```
 
+Modules recursively move parameters, running-statistic buffers, and existing
+gradients. State loading preserves the destination device and dtype:
+
+```python
+model = mt.nn.Linear(3, 2).to(mt.cuda(0))
+state = model.state_dict()
+model.load_state_dict(state)
+```
+
 ## Examples
 
 The MNIST entry points do not download data automatically:
@@ -53,6 +62,7 @@ The MNIST entry points do not download data automatically:
 ```bash
 python -m apps.mlp_mnist --help
 python -m apps.lenet5_mnist --help
+python -m examples.device_smoke
 ```
 
 Expected files are under `data/MNIST/raw/`. Unit tests use synthetic inputs and
@@ -62,6 +72,7 @@ do not require the dataset.
 
 - `mytorch/`: canonical framework and NumPy/CuPy device API
 - `apps/`: canonical runnable examples
+- `examples/`: small backend and migration smoke programs
 - `tests/`: canonical CPU/CUDA tests
 - `docs/`: architecture and migration notes
 - `MyTorch_分阶段迁移_Codex任务书.md`: staged V0-V12 migration plan

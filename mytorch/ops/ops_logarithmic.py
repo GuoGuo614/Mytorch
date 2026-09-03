@@ -6,8 +6,6 @@ from ..autograd import TensorTuple, TensorTupleOp
 from .ops_mathematic import *
 from ..backend import get_array_module
 
-import numpy as array_api
-
 class LogSoftmax(TensorOp):
     def compute(self, Z: NDArray) -> NDArray:
         xp = get_array_module(Z)
@@ -59,6 +57,7 @@ class LogSumExp(TensorOp):
                 axes_tuple = self.axes
 
             # 逆序删除
+            axes_tuple = tuple(axis % Z.ndim for axis in axes_tuple)
             for axis in sorted(axes_tuple, reverse=True):
                 result_shape.pop(axis)
 
@@ -74,6 +73,7 @@ class LogSumExp(TensorOp):
             # 需要将 lse_result 广播到 input_tensor 的形状
             lse_shape = list(input_tensor.shape)
             axes_tuple = self.axes if isinstance(self.axes, tuple) else (self.axes,)
+            axes_tuple = tuple(axis % len(input_tensor.shape) for axis in axes_tuple)
             for axis in axes_tuple:
                 lse_shape[axis] = 1
             lse_broadcasted = reshape(lse_result, lse_shape)
@@ -86,6 +86,7 @@ class LogSumExp(TensorOp):
         if self.axes is not None:
             out_grad_shape = list(input_tensor.shape)
             axes_tuple = self.axes if isinstance(self.axes, tuple) else (self.axes,)
+            axes_tuple = tuple(axis % len(input_tensor.shape) for axis in axes_tuple)
             for axis in axes_tuple:
                 out_grad_shape[axis] = 1
             out_grad_reshaped = reshape(out_grad, out_grad_shape)

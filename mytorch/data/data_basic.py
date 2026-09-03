@@ -49,11 +49,13 @@ class DataLoader:
         dataset: Dataset,
         batch_size: Optional[int] = 1,
         shuffle: bool = False,
+        device=None,
     ):
 
         self.dataset = dataset
         self.shuffle = shuffle
         self.batch_size = batch_size
+        self.device = device
         if not self.shuffle:
             self.ordering = np.array_split(np.arange(len(dataset)),
                                            range(batch_size, len(dataset), batch_size))
@@ -77,5 +79,5 @@ class DataLoader:
             raise StopIteration()
 
         samples = self.dataset[self.ordering[self.idx]]
-        samples = [Tensor(s) for s in samples]
+        samples = [Tensor(s, device=self.device) for s in samples]
         return samples

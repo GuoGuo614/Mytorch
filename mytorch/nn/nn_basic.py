@@ -1,10 +1,11 @@
 """The module.
 """
+import math
 from typing import Any, Optional
 from mytorch.autograd import Tensor
 from mytorch import ops
 import mytorch.init as init
-import numpy as np
+from mytorch.backend import Device, cpu, cuda, to_device
 
 
 class Parameter(Tensor):
@@ -53,9 +54,96 @@ class Module:
     def __init__(self) -> None:
         self.training = True
 
+    def _named_tensors(self):
+        seen = set()
+
+        def walk(value, prefix):
+            if isinstance(value, Tensor):
+                if id(value) not in seen:
+                    seen.add(id(value))
+                    yield prefix, value
+                return
+            if isinstance(value, Module):
+                for name, child in value.__dict__.items():
+                    child_prefix = f"{prefix}.{name}" if prefix else name
+                    yield from walk(child, child_prefix)
+                return
+            if isinstance(value, dict):
+                for name, child in value.items():
+                    child_prefix = f"{prefix}.{name}" if prefix else str(name)
+                    yield from walk(child, child_prefix)
+                return
+            if isinstance(value, (list, tuple)):
+                for index, child in enumerate(value):
+                    child_prefix = f"{prefix}.{index}" if prefix else str(index)
+                    yield from walk(child, child_prefix)
+
+        yield from walk(self, "")
+
+    def named_parameters(self):
+        return [(name, tensor) for name, tensor in self._named_tensors()
+                if isinstance(tensor, Parameter)]
+
     def parameters(self) -> list[Tensor]:
-        """Return the list of parameters in the module."""
-        return _unpack_params(self.__dict__)
+        """Return parameters once, preserving module traversal order."""
+        return [parameter for _, parameter in self.named_parameters()]
+
+    def named_buffers(self):
+        return [(name, tensor) for name, tensor in self._named_tensors()
+                if not isinstance(tensor, Parameter)]
+
+    def to(self, device: Device):
+        """Move parameters, persistent buffers, and existing gradients in place."""
+        if not isinstance(device, Device):
+            raise TypeError(f"device must be a Device, got {type(device).__name__}")
+        for _, tensor in self._named_tensors():
+            tensor.cached_data = to_device(
+                tensor.realize_cached_data(), device, dtype=tensor.dtype
+            )
+            if getattr(tensor, "grad", None) is not None:
+                tensor.grad = tensor.grad.to(device)
+        return self
+
+    def cpu(self):
+        return self.to(cpu())
+
+    def cuda(self, index=0):
+        return self.to(cuda(index))
+
+    def state_dict(self):
+        """Return detached device-preserving copies of parameters and buffers."""
+        state = {}
+        for name, tensor in self._named_tensors():
+            data = tensor.realize_cached_data().copy()
+            state[name] = Tensor(
+                data, device=tensor.device, dtype=tensor.dtype, requires_grad=False
+            )
+        return state
+
+    def load_state_dict(self, state_dict, strict=True):
+        current = dict(self._named_tensors())
+        missing = sorted(set(current) - set(state_dict))
+        unexpected = sorted(set(state_dict) - set(current))
+        if strict and (missing or unexpected):
+            raise KeyError(
+                f"state_dict mismatch: missing={missing}, unexpected={unexpected}"
+            )
+        for name, destination in current.items():
+            if name not in state_dict:
+                continue
+            source = state_dict[name]
+            source_data = (
+                source.realize_cached_data() if isinstance(source, Tensor) else source
+            )
+            if tuple(source_data.shape) != tuple(destination.shape):
+                raise ValueError(
+                    f"shape mismatch for {name}: expected {destination.shape}, "
+                    f"got {source_data.shape}"
+                )
+            destination.cached_data = to_device(
+                source_data, destination.device, dtype=destination.dtype
+            )
+        return {"missing_keys": missing, "unexpected_keys": unexpected}
 
     def _children(self) -> list["Module"]:
         return _child_modules(self.__dict__)
@@ -136,10 +224,16 @@ class Sequential(Module):
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
+        if logits.device != y.device:
+            raise ValueError(
+                f"device mismatch: logits are on {logits.device}, labels are on {y.device}"
+            )
         lse = ops.logsumexp(logits, axes=(1,))
 
         batch_size, num_classes = logits.shape
-        y_one_hot = init.one_hot(num_classes, y)
+        y_one_hot = init.one_hot(
+            num_classes, y, device=logits.device, dtype=logits.dtype
+        )
 
         selected_logits = ops.summation(logits * y_one_hot, axes=(1,))
         loss_per_sample = lse - selected_logits
@@ -156,12 +250,12 @@ class BatchNorm1d(Module):
         kwargs = {'device': device, 'dtype': dtype}
 
         # Learnable parameters
-        self.weight = Parameter(init.ones(dim, 1, **kwargs))
-        self.bias = Parameter(init.zeros(dim, 1, **kwargs))
+        self.weight = Parameter(init.ones(dim, **kwargs))
+        self.bias = Parameter(init.zeros(dim, **kwargs))
 
         # Running statistics (not parameters, so not using Parameter)
-        self.running_mean = init.zeros(dim, 1, **kwargs)
-        self.running_var = init.ones(dim, 1, **kwargs)
+        self.running_mean = init.zeros(dim, **kwargs)
+        self.running_var = init.ones(dim, **kwargs)
 
     def forward(self, x: Tensor) -> Tensor:
         batch_size, features = x.shape
@@ -204,8 +298,8 @@ class LayerNorm1d(Module):
         self.eps = eps
         kwargs = {'device': device, 'dtype': dtype}
 
-        self.weight = Parameter(init.ones(dim, 1, **kwargs))
-        self.bias = Parameter(init.zeros(dim, 1, **kwargs))
+        self.weight = Parameter(init.ones(dim, **kwargs))
+        self.bias = Parameter(init.zeros(dim, **kwargs))
 
     def forward(self, x: Tensor) -> Tensor:
         batch_size, features = x.shape
@@ -265,12 +359,12 @@ class Conv2d(Module):
         fan_out = out_channels * kernel_size * kernel_size
 
         # 直接创建正确形状的权重
-        bound = np.sqrt(6.0 / fan_in)
+        bound = math.sqrt(6.0 / fan_in)
         self.weight = Parameter(init.rand(out_channels, in_channels, kernel_size, kernel_size,
                                          low=-bound, high=bound, **kwargs))
 
         if bias:
-            bound_bias = 1.0 / np.sqrt(fan_in)
+            bound_bias = 1.0 / math.sqrt(fan_in)
             self.bias = Parameter(init.rand(1, out_channels, 1, 1,
                                            low=-bound_bias, high=bound_bias, **kwargs))
 

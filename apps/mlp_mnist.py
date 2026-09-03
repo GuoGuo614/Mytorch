@@ -144,9 +144,12 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--save-model', action='store_true',
                         help='For Saving the current Model')
+    parser.add_argument('--device', choices=('cpu', 'cuda'), default='cpu',
+                        help='training device (default: cpu)')
     args = parser.parse_args()
 
     np.random.seed(args.seed)
+    device = torch.cuda(0) if args.device == 'cuda' else torch.cpu()
 
     # 加载数据集
     print("Loading MNIST dataset...")
@@ -160,8 +163,8 @@ def main():
         data_dir / "t10k-labels-idx1-ubyte.gz",
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, device=device)
+    test_loader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, device=device)
 
     # 快速测试模式：只使用部分数据
     if args.quick_test:
@@ -177,14 +180,14 @@ def main():
         test_dataset.labels = test_dataset.labels[test_indices]
 
         # 重新创建loader
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, device=device)
+        test_loader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, device=device)
 
         # 修改epoch数
         args.epochs = 2
 
     # 创建模型
-    model = MLP()
+    model = MLP().to(device)
 
     # 统计模型参数量
     num_params = sum(p.numpy().size for p in model.parameters())

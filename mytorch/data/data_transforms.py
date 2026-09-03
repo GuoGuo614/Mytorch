@@ -1,4 +1,4 @@
-import numpy as np
+from ..backend import get_array_module
 
 class Transform:
     def __call__(self, x):
@@ -18,11 +18,9 @@ class RandomFlipHorizontal(Transform):
             H x W x C NDArray corresponding to image flipped with probability self.p
         Note: use the provided code to provide randomness, for easier testing
         """
-        flip_img = np.random.rand() < self.p
-        if flip_img:
-            return img[:, ::-1, :]
-        else:
-            return img
+        xp = get_array_module(img)
+        flip_img = xp.random.rand() < self.p
+        return xp.where(flip_img, img[:, ::-1, :], img)
 
 
 class RandomCrop(Transform):
@@ -37,20 +35,20 @@ class RandomCrop(Transform):
             H x W x C NDArray of cliped image
         Note: generate the image shifted by shift_x, shift_y specified below
         """
-        shift_x, shift_y = np.random.randint(low=-self.padding, high=self.padding+1, size=2)
+        xp = get_array_module(img)
+        shifts = xp.random.randint(
+            low=-self.padding, high=self.padding + 1, size=2
+        )
         H, W, C = img.shape
 
-        padded_img = np.pad(img,
+        padded_img = xp.pad(img,
                             ((self.padding, self.padding),
                             (self.padding, self.padding),
                             (0, 0)),
                             mode="constant",
                             constant_values=0)
-        start_x = self.padding + shift_x
-        start_y = self.padding + shift_y
-
-        cropped_img = padded_img[start_x:start_x + H,
-                            start_y:start_y + W,
-                            :]
+        rows = xp.arange(H) + self.padding + shifts[0]
+        columns = xp.arange(W) + self.padding + shifts[1]
+        cropped_img = padded_img[rows[:, None], columns[None, :], :]
 
         return cropped_img

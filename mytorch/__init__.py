@@ -9,6 +9,7 @@ from .backend import (
     cpu,
     cuda,
     default_device,
+    device_of,
     get_array_module,
     is_cuda_available,
     to_device,

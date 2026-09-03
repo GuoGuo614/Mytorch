@@ -11,10 +11,6 @@ from .backend import Device, asnumpy, cpu, device_of, to_device
 LAZY_MODE = False
 TENSOR_COUNTER = 0
 
-# NOTE: we will import numpy as the array_api
-# as the backend for our computations, this line will change in later homeworks
-
-import numpy as array_api
 NDArray = numpy.ndarray
 
 
@@ -197,6 +193,14 @@ class TensorTuple(Value):
         """Create a new tensor that shares the data but detaches from the graph."""
         return TensorTuple.make_const(self.realize_cached_data())
 
+    @property
+    def device(self):
+        values = self.realize_cached_data()
+        devices = [device_of(value) for value in values]
+        if devices and any(device != devices[0] for device in devices[1:]):
+            raise ValueError("TensorTuple contains values on different devices")
+        return devices[0] if devices else cpu()
+
 
 class Tensor(Value):
     grad: "Tensor"
@@ -297,7 +301,7 @@ class Tensor(Value):
             raise TypeError(f"device must be a Device, got {type(device).__name__}")
         if device == self.device:
             return self
-        return Tensor(
+        return type(self)(
             to_device(self.realize_cached_data(), device),
             device=device,
             dtype=self.dtype,
@@ -315,7 +319,7 @@ class Tensor(Value):
     def backward(self, out_grad=None):
         out_grad = (
             out_grad
-            if out_grad
+            if out_grad is not None
             else init.ones(*self.shape, dtype=self.dtype, device=self.device)
         )
         compute_gradient_of_variables(self, out_grad)

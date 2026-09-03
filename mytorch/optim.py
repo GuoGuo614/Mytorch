@@ -1,18 +1,32 @@
-"""Optimization module"""
-import mytorch as torch
-import numpy as np
+"""Device-preserving optimizers."""
+
+from .backend import device_of, get_array_module, to_device
 
 
 class Optimizer:
     def __init__(self, params):
-        self.params = params
+        self.params = list(params)
 
     def step(self):
         raise NotImplementedError()
 
     def reset_grad(self):
-        for p in self.params:
-            p.grad = None
+        for parameter in self.params:
+            parameter.grad = None
+
+    zero_grad = reset_grad
+
+    @staticmethod
+    def _gradient_data(parameter):
+        if parameter.grad is None:
+            return None
+        gradient = parameter.grad.realize_cached_data()
+        if device_of(gradient) != parameter.device:
+            raise ValueError(
+                f"optimizer device mismatch: parameter is on {parameter.device}, "
+                f"gradient is on {device_of(gradient)}"
+            )
+        return gradient
 
 
 class SGD(Optimizer):
@@ -24,18 +38,44 @@ class SGD(Optimizer):
         self.weight_decay = weight_decay
 
     def step(self):
-        for param in self.params:
-            grad = self.u.get(param, 0) * self.momentum + (1-self.momentum) * (param.grad.data + self.weight_decay * param.data)
-            grad = torch.Tensor(grad, dtype = param.dtype)
-            self.u[param] = grad
-            param.data = param.data - self.lr * grad
+        for parameter in self.params:
+            gradient = self._gradient_data(parameter)
+            if gradient is None:
+                continue
+            data = parameter.realize_cached_data()
+            xp = get_array_module(data)
+            gradient = gradient + self.weight_decay * data
+            if self.momentum:
+                velocity = self.u.get(parameter)
+                if velocity is None:
+                    velocity = xp.zeros_like(data)
+                elif device_of(velocity) != parameter.device:
+                    velocity = to_device(velocity, parameter.device, dtype=data.dtype)
+                velocity = self.momentum * velocity + (1 - self.momentum) * gradient
+                self.u[parameter] = velocity.astype(data.dtype, copy=False)
+                gradient = velocity
+            parameter.cached_data = (data - self.lr * gradient).astype(
+                data.dtype, copy=False
+            )
 
     def clip_grad_norm(self, max_norm=0.25):
-        """
-        Clips gradient norm of parameters.
-        Note: This does not need to be implemented for HW2 and can be skipped.
-        """
-        raise NotImplementedError()
+        """Clip each device-local parameter set without copying arrays to host."""
+        groups = {}
+        for parameter in self.params:
+            gradient = self._gradient_data(parameter)
+            if gradient is not None:
+                groups.setdefault(parameter.device, []).append((parameter, gradient))
+        for values in groups.values():
+            xp = get_array_module(values[0][1])
+            total = xp.zeros((), dtype=values[0][1].dtype)
+            for _, gradient in values:
+                total = total + xp.sum(gradient * gradient)
+            scale = xp.minimum(1, max_norm / (xp.sqrt(total) + 1e-12))
+            for parameter, gradient in values:
+                parameter.grad.cached_data = (gradient * scale).astype(
+                    gradient.dtype, copy=False
+                )
+
 
 class Adam(Optimizer):
     def __init__(
@@ -54,23 +94,32 @@ class Adam(Optimizer):
         self.eps = eps
         self.weight_decay = weight_decay
         self.t = 0
-
         self.m = {}
         self.v = {}
 
     def step(self):
         self.t += 1
-        for w in self.params:
-            if w.grad is not None:
-                grad_with_L2rgl = w.grad.data + self.weight_decay * w.data
-            else:
-                grad_with_L2rgl = self.weight_decay * w.data
-            new_m = self.beta1 * self.m.get(w, 0) + (1 - self.beta1) * grad_with_L2rgl.data
-            new_v = self.beta2 * self.v.get(w, 0) + (1 - self.beta2) * grad_with_L2rgl.data * grad_with_L2rgl.data
-            self.m[w] = new_m
-            self.v[w] = new_v
-            m_hat = new_m.data / (1 - self.beta1 ** self.t)
-            v_hat = new_v.data / (1 - self.beta2 ** self.t)
-            out = w.data - self.lr * m_hat / (torch.ops.power_scalar(v_hat, 1/2) + self.eps)
-            out = torch.Tensor(out, dtype=w.dtype)
-            w.data = out
+        for parameter in self.params:
+            gradient = self._gradient_data(parameter)
+            if gradient is None:
+                continue
+            data = parameter.realize_cached_data()
+            xp = get_array_module(data)
+            gradient = gradient + self.weight_decay * data
+            previous_m = self.m.get(parameter)
+            previous_v = self.v.get(parameter)
+            if previous_m is None:
+                previous_m = xp.zeros_like(data)
+                previous_v = xp.zeros_like(data)
+            elif device_of(previous_m) != parameter.device:
+                previous_m = to_device(previous_m, parameter.device, dtype=data.dtype)
+                previous_v = to_device(previous_v, parameter.device, dtype=data.dtype)
+            moment = self.beta1 * previous_m + (1 - self.beta1) * gradient
+            variance = self.beta2 * previous_v + (1 - self.beta2) * gradient * gradient
+            self.m[parameter] = moment.astype(data.dtype, copy=False)
+            self.v[parameter] = variance.astype(data.dtype, copy=False)
+            moment_hat = moment / (1 - self.beta1 ** self.t)
+            variance_hat = variance / (1 - self.beta2 ** self.t)
+            parameter.cached_data = (
+                data - self.lr * moment_hat / (xp.sqrt(variance_hat) + self.eps)
+            ).astype(data.dtype, copy=False)

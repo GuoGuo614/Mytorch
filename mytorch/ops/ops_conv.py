@@ -4,14 +4,6 @@ from typing import Optional
 from ..autograd import NDArray
 from ..autograd import Op, Tensor, Value, TensorOp
 from ..backend import get_array_module
-import numpy as array_api
-
-
-def _require_numpy(value, op_name):
-    if get_array_module(value) is not array_api:
-        raise NotImplementedError(
-            f"{op_name} does not support CUDA in V1; full operator device support is V2"
-        )
 
 
 class Conv2d(TensorOp):
@@ -25,7 +17,7 @@ class Conv2d(TensorOp):
         weight: (out_channels, in_channels, kernel_h, kernel_w)
         output: (batch_size, out_channels, out_h, out_w)
         """
-        _require_numpy(x, "Conv2d")
+        xp = get_array_module(x)
         batch_size, in_channels, H, W = x.shape
         out_channels, in_channels_w, kernel_h, kernel_w = weight.shape
 
@@ -36,7 +28,7 @@ class Conv2d(TensorOp):
         out_w = (W - kernel_w) // self.stride + 1
 
         # 优化：减少循环，使用向量化操作
-        output = array_api.zeros((batch_size, out_channels, out_h, out_w), dtype=x.dtype)
+        output = xp.zeros((batch_size, out_channels, out_h, out_w), dtype=x.dtype)
 
         # 只对输出位置和输出通道循环
         for i in range(out_h):
@@ -54,7 +46,7 @@ class Conv2d(TensorOp):
                     # window: (batch_size, in_channels, kernel_h, kernel_w)
                     # weight[oc]: (in_channels, kernel_h, kernel_w)
                     # 广播相乘后求和: (batch_size, in_channels, kernel_h, kernel_w) -> (batch_size,)
-                    output[:, oc, i, j] = array_api.sum(window * weight[oc], axis=(1, 2, 3))
+                    output[:, oc, i, j] = xp.sum(window * weight[oc], axis=(1, 2, 3))
 
         return output
 
@@ -72,7 +64,8 @@ class Conv2d(TensorOp):
         _, _, out_h, out_w = out_grad.shape
 
         # 计算x的梯度
-        grad_x = array_api.zeros_like(x_data)
+        xp = get_array_module(x_data)
+        grad_x = xp.zeros_like(x_data)
         out_grad_data = out_grad.realize_cached_data()
 
         for b in range(batch_size):
@@ -88,7 +81,7 @@ class Conv2d(TensorOp):
                             weight_data[oc] * out_grad_data[b, oc, i, j]
 
         # 计算weight的梯度
-        grad_weight = array_api.zeros_like(weight_data)
+        grad_weight = xp.zeros_like(weight_data)
 
         for b in range(batch_size):
             for oc in range(out_channels):
@@ -120,13 +113,13 @@ class MaxPool2d(TensorOp):
         x: (batch_size, channels, height, width)
         output: (batch_size, channels, out_h, out_w)
         """
-        _require_numpy(x, "MaxPool2d")
+        xp = get_array_module(x)
         batch_size, channels, H, W = x.shape
 
         out_h = (H - self.kernel_size) // self.stride + 1
         out_w = (W - self.kernel_size) // self.stride + 1
 
-        output = array_api.zeros((batch_size, channels, out_h, out_w), dtype=x.dtype)
+        output = xp.zeros((batch_size, channels, out_h, out_w), dtype=x.dtype)
 
         # 优化：减少循环
         for i in range(out_h):
@@ -139,9 +132,7 @@ class MaxPool2d(TensorOp):
                 # 提取所有batch和channel的窗口
                 window = x[:, :, h_start:h_end, w_start:w_end]
                 # (batch_size, channels, kernel_size, kernel_size) -> (batch_size, channels)
-                output[:, :, i, j] = array_api.max(window, axis=(2, 3))
-
-        return output
+                output[:, :, i, j] = xp.max(window, axis=(2, 3))
 
         return output
 
@@ -156,7 +147,8 @@ class MaxPool2d(TensorOp):
         batch_size, channels, H, W = x_data.shape
         _, _, out_h, out_w = out_grad_data.shape
 
-        grad_x = array_api.zeros_like(x_data)
+        xp = get_array_module(x_data)
+        grad_x = xp.zeros_like(x_data)
 
         for b in range(batch_size):
             for c in range(channels):
@@ -168,7 +160,7 @@ class MaxPool2d(TensorOp):
                         w_end = w_start + self.kernel_size
 
                         window = x_data[b, c, h_start:h_end, w_start:w_end]
-                        max_val = array_api.max(window)
+                        max_val = xp.max(window)
 
                         # 找到最大值的位置并传递梯度
                         mask = (window == max_val).astype(x_data.dtype)
@@ -193,13 +185,13 @@ class AvgPool2d(TensorOp):
         x: (batch_size, channels, height, width)
         output: (batch_size, channels, out_h, out_w)
         """
-        _require_numpy(x, "AvgPool2d")
+        xp = get_array_module(x)
         batch_size, channels, H, W = x.shape
 
         out_h = (H - self.kernel_size) // self.stride + 1
         out_w = (W - self.kernel_size) // self.stride + 1
 
-        output = array_api.zeros((batch_size, channels, out_h, out_w), dtype=x.dtype)
+        output = xp.zeros((batch_size, channels, out_h, out_w), dtype=x.dtype)
 
         # 优化：减少循环
         for i in range(out_h):
@@ -212,9 +204,7 @@ class AvgPool2d(TensorOp):
                 # 提取所有batch和channel的窗口
                 window = x[:, :, h_start:h_end, w_start:w_end]
                 # (batch_size, channels, kernel_size, kernel_size) -> (batch_size, channels)
-                output[:, :, i, j] = array_api.mean(window, axis=(2, 3))
-
-        return output
+                output[:, :, i, j] = xp.mean(window, axis=(2, 3))
 
         return output
 
@@ -229,7 +219,8 @@ class AvgPool2d(TensorOp):
         batch_size, channels, H, W = x_data.shape
         _, _, out_h, out_w = out_grad_data.shape
 
-        grad_x = array_api.zeros_like(x_data)
+        xp = get_array_module(x_data)
+        grad_x = xp.zeros_like(x_data)
         pool_size = self.kernel_size * self.kernel_size
 
         for b in range(batch_size):
@@ -263,8 +254,8 @@ class Pad(TensorOp):
         """
         填充操作
         """
-        _require_numpy(x, "Pad")
-        return array_api.pad(x, self.pad_width, mode='constant', constant_values=0)
+        xp = get_array_module(x)
+        return xp.pad(x, self.pad_width, mode='constant', constant_values=0)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         """

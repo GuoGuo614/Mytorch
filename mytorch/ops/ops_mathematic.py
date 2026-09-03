@@ -7,13 +7,6 @@ from ..autograd import NDArray
 from ..autograd import Op, Tensor, Value, TensorOp
 from ..autograd import TensorTuple, TensorTupleOp
 from ..backend import get_array_module
-import numpy
-
-# NOTE: we will import numpy as the array_api
-# as the backend for our computations, this line will change in later homeworks
-
-BACKEND = "np"
-import numpy as array_api
 
 class EWiseAdd(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
@@ -226,6 +219,7 @@ class Summation(TensorOp):
         # 如果指定了轴，需要在那些轴上添加维度
         if self.axes is not None:
             axes = self.axes if isinstance(self.axes, tuple) else (self.axes,)
+            axes = tuple(axis % len(input_shape) for axis in axes)
             # 对每个被求和的轴，添加维度1
             for axis in sorted(axes):
                 grad = reshape(grad, grad.shape[:axis] + (1,) + grad.shape[axis:])
@@ -315,7 +309,7 @@ class ReLU(TensorOp):
     def gradient(self, out_grad, node):
         input_data = node.inputs[0].realize_cached_data()
         xp = get_array_module(input_data)
-        mask = (input_data > 0).astype(xp.float32)
+        mask = (input_data > 0).astype(input_data.dtype)
 
         return out_grad * Tensor(mask, device=out_grad.device)
 

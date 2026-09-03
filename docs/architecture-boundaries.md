@@ -7,6 +7,12 @@ graph, automatic differentiation, NumPy/CuPy device layer, operators, neural
 network modules, optimizers, and data utilities. Root-level applications import
 only this package.
 
+V2 keeps one operator implementation per API and selects NumPy or CuPy from
+the input array. Module migration is recursive, optimizer state follows its
+parameter device, and only explicit transfers or reporting through
+`Tensor.numpy()` may copy CUDA data to the host. The convolution implementation
+in this stage is a correctness baseline; kernel optimization belongs to V3.
+
 ## Removed legacy framework
 
 The previous Needle homework implementation and its custom C++/CUDA NDArray
