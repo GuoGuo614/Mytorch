@@ -1,2 +1,6 @@
-hw4/.DS_Store
 .DS_Store
+build/
+__pycache__/
+*.py[cod]
+python/needle/backend_ndarray/*.pyd
+python/needle/backend_ndarray/*.so
