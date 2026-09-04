@@ -398,6 +398,7 @@ class Conv2d(Module):
         self.implementation = implementation
         self.max_im2col_bytes = max_im2col_bytes
         self.last_implementation = None
+        self.last_backward_implementation = None
         self.last_chunk_rows = None
 
         kwargs = {'device': device, 'dtype': dtype}
@@ -446,6 +447,10 @@ class Conv2d(Module):
         )
         result = conv_op(x, self.weight)
         self.last_implementation = conv_op.selected_implementation
+        self.last_backward_implementation = (
+            "im2col" if conv_op.selected_implementation == "triton"
+            else conv_op.selected_implementation
+        )
         self.last_chunk_rows = conv_op.chunk_rows
 
         if self.has_bias:

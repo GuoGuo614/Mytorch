@@ -1,4 +1,4 @@
-"""Benchmark Conv2d naive, im2col, and auto forward implementations."""
+"""Benchmark Conv2d naive, im2col, Triton, and auto forward paths."""
 
 import argparse
 import json
@@ -6,6 +6,7 @@ import math
 import statistics
 import time
 import tracemalloc
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -72,6 +73,7 @@ def benchmark_one(args, implementation, device):
         durations.append((time.perf_counter() - started) * 1000)
     output_shape, peak_memory = _measure_peak_memory(layer, inputs, device)
     return {
+        "case": args.case,
         "input_shape": list(args.shape),
         "weight_shape": list(layer.weight.shape),
         "output_shape": list(output_shape),
@@ -99,8 +101,13 @@ def main():
     parser.add_argument("--padding", type=int, default=1)
     parser.add_argument("--dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
-    parser.add_argument("--implementation", choices=("all", "naive", "im2col", "auto"),
+    parser.add_argument("--implementation", choices=("all", "naive", "im2col", "triton", "auto"),
                         default="all")
+    parser.add_argument(
+        "--suite", choices=("single", "small", "medium", "large", "all"),
+        default="single",
+        help="run --shape or reproducible small/medium/large shape presets",
+    )
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--max-im2col-bytes", type=int, default=64 * 1024 * 1024)
@@ -109,12 +116,24 @@ def main():
     args = parser.parse_args()
     args.shape = tuple(args.shape)
     device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
-    implementations = (
-        ("naive", "im2col", "auto")
-        if args.implementation == "all" else (args.implementation,)
-    )
-    for implementation in implementations:
-        print(json.dumps(benchmark_one(args, implementation, device)))
+    implementations = (("naive", "im2col", "triton")
+                       if args.implementation == "all" and device.kind == "cuda"
+                       else (("naive", "im2col")
+                             if args.implementation == "all"
+                             else (args.implementation,)))
+    presets = {
+        "small": ((1, 3, 16, 16), 8),
+        "medium": ((4, 8, 28, 28), 16),
+        "large": ((8, 16, 32, 32), 32),
+    }
+    cases = ("small", "medium", "large") if args.suite == "all" else (args.suite,)
+    for case in cases:
+        case_args = SimpleNamespace(**vars(args))
+        case_args.case = case
+        if case != "single":
+            case_args.shape, case_args.out_channels = presets[case]
+        for implementation in implementations:
+            print(json.dumps(benchmark_one(case_args, implementation, device)))
 
 
 if __name__ == "__main__":

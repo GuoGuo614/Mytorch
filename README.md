@@ -71,18 +71,29 @@ python -m apps.lenet5_mnist --help
 python -m examples.device_smoke
 ```
 
-Conv2d supports `implementation="naive"`, `"im2col"`, or `"auto"`. The
-default `auto` path currently selects bounded-memory im2col when supported:
+Conv2d supports `implementation="naive"`, `"im2col"`, `"triton"`, or `"auto"`.
+On supported CUDA inputs, the default `auto` path selects the V5 Triton
+implicit-GEMM forward kernel; its backward pass explicitly uses the optimized
+im2col/CuPy-kernel path. CPU and unsupported CUDA inputs fall back to bounded
+im2col, then naive:
 
 ```python
 conv = mt.nn.Conv2d(3, 16, 3, padding=1, implementation="auto")
 ```
+
+| Conv2d path | CPU forward | CUDA forward | backward |
+| --- | --- | --- | --- |
+| `naive` | yes | yes | naive |
+| `im2col` | yes | yes | im2col; CUDA col2im uses a CuPy kernel |
+| `triton` | no | yes, supported shapes/dtypes only | im2col/CuPy fallback (not Triton) |
+| `auto` | im2col → naive | Triton → im2col → naive | follows the selected forward path above |
 
 Run the V3 benchmark without writing result files:
 
 ```bash
 python -m benchmarks.bench_conv --device cpu
 python -m benchmarks.bench_conv --device cuda
+python -m benchmarks.bench_conv --device cuda --suite all --implementation all
 ```
 
 See `docs/conv2d.md` for layout, output-shape, selection, and memory details.
@@ -90,6 +101,10 @@ See `docs/conv2d.md` for layout, output-shape, selection, and memory details.
 V4 provides forward-fused Triton implementations of Linear, Softmax,
 LayerNorm, and RMSNorm. Their backward passes intentionally remain eager.
 See `docs/fused-ops.md` for dispatch constraints and benchmarking.
+
+V5 extends the same CuPy-backed Triton runtime and explicit dispatch model to
+Conv2d forward. See `docs/conv2d.md` for the forward/backward support matrix,
+shape limits, fallbacks, correctness coverage, and benchmark protocol.
 
 Expected files are under `data/MNIST/raw/`. Unit tests use synthetic inputs and
 do not require the dataset.

@@ -65,6 +65,7 @@ def _run(case, implementation, device, max_im2col_bytes=64 * 1024 * 1024):
         "db": bias.grad.numpy(),
         "selected": conv_op.selected_implementation,
         "chunk_rows": conv_op.chunk_rows,
+        "backward": conv_op.backward_implementation,
     }
 
 
@@ -109,6 +110,70 @@ def test_auto_selection_is_recorded_and_has_memory_fallback():
         mt.ops.Conv2d(
             implementation="im2col", max_im2col_bytes=64
         )(x, weight)
+
+
+def test_explicit_triton_rejects_cpu_with_clear_reason():
+    x = mt.Tensor(np.ones((1, 1, 5, 7), dtype=np.float32))
+    weight = mt.Tensor(np.ones((2, 1, 3, 3), dtype=np.float32))
+    with pytest.raises(RuntimeError, match="requires CUDA arrays"):
+        mt.ops.conv2d(x, weight, implementation="triton")
+
+
+@pytest.mark.skipif(not mt.is_cuda_available(), reason="CUDA is unavailable")
+@pytest.mark.parametrize("case", CASES)
+def test_triton_forward_and_im2col_fallback_gradients_match(case):
+    device = mt.cuda(0)
+    reference = _run(case, "im2col", device)
+    triton = _run(case, "triton", device)
+    assert triton["selected"] == "triton"
+    assert triton["backward"] == "im2col"
+    for name in ("output", "dx", "dw", "db"):
+        np.testing.assert_allclose(
+            reference[name], triton[name], rtol=2e-4, atol=5e-4
+        )
+
+
+@pytest.mark.skipif(not mt.is_cuda_available(), reason="CUDA is unavailable")
+def test_triton_auto_selection_and_explicit_shape_limits():
+    device = mt.cuda(0)
+    x = mt.Tensor(np.ones((1, 1, 11, 13), dtype=np.float32), device=device)
+    weight = mt.Tensor(np.ones((7, 1, 3, 3), dtype=np.float32), device=device)
+    output = mt.ops.Conv2d(implementation="auto")(x, weight)
+    assert output.op.selected_implementation == "triton"
+
+    oversized = mt.Tensor(
+        np.ones((1, 1, 8, 8), dtype=np.float32), device=device
+    )
+    with pytest.raises(RuntimeError, match="kernel dimensions up to 7"):
+        mt.ops.conv2d(x, oversized, implementation="triton")
+    fallback = mt.ops.Conv2d(implementation="auto")(x, oversized)
+    assert fallback.op.selected_implementation == "im2col"
+    with pytest.raises(RuntimeError, match="stride dimensions up to 4"):
+        mt.ops.conv2d(x, weight, stride=5, implementation="triton")
+    stride_fallback = mt.ops.Conv2d(
+        stride=5, implementation="auto"
+    )(x, weight)
+    assert stride_fallback.op.selected_implementation == "im2col"
+
+    x64 = mt.Tensor(
+        np.ones((1, 1, 11, 13), dtype=np.float64), device=device
+    )
+    weight64 = mt.Tensor(
+        np.ones((7, 1, 3, 3), dtype=np.float64), device=device
+    )
+    with pytest.raises(RuntimeError, match="float16 and float32"):
+        mt.ops.conv2d(x64, weight64, implementation="triton")
+    fallback64 = mt.ops.Conv2d(implementation="auto")(x64, weight64)
+    assert fallback64.op.selected_implementation == "im2col"
+
+    xp = device.xp
+    noncontiguous = xp.ones((1, 1, 13, 11), dtype=xp.float32).transpose(
+        0, 1, 3, 2
+    )
+    with pytest.raises(RuntimeError, match="contiguous arrays"):
+        mt.ops.conv2d(
+            mt.Tensor(noncontiguous), weight, implementation="triton"
+        )
 
 
 def test_conv_module_supports_non_square_input_kernel_stride_and_padding():

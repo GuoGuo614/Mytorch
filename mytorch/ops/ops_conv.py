@@ -10,7 +10,7 @@ from ..autograd import Tensor, TensorOp
 from ..backend import get_array_module
 
 
-_CONV_IMPLEMENTATIONS = {"auto", "naive", "im2col"}
+_CONV_IMPLEMENTATIONS = {"auto", "naive", "im2col", "triton"}
 DEFAULT_IM2COL_MAX_BYTES = 64 * 1024 * 1024
 
 
@@ -73,8 +73,45 @@ def _im2col_supported(x, weight, max_im2col_bytes):
     )
 
 
+def _triton_conv_support_reason(x, weight, shape):
+    from ..kernels.runtime import triton_support_reason
+
+    reason = triton_support_reason(
+        (x, weight), operation="Conv2d", dimensions={4}
+    )
+    if reason is not None:
+        return reason
+    (_, in_channels, _, _, _, kernel_h, kernel_w, _, _,
+     stride_h, stride_w) = shape
+    if kernel_h > 7 or kernel_w > 7:
+        return "Conv2d Triton path supports kernel dimensions up to 7"
+    if stride_h > 4 or stride_w > 4:
+        return "Conv2d Triton path supports stride dimensions up to 4"
+    if in_channels * kernel_h * kernel_w > 4096:
+        return "Conv2d Triton reduction dimension exceeds 4096"
+    return None
+
+
+def _resolve_triton_conv(x, weight, shape, *, explicit):
+    reason = _triton_conv_support_reason(x, weight, shape)
+    if reason is None:
+        try:
+            from ..kernels.driver import ensure_cupy_triton_driver
+            ensure_cupy_triton_driver()
+        except Exception as error:
+            reason = f"Triton CUDA driver initialization failed: {error}"
+        else:
+            return True
+    if explicit:
+        raise RuntimeError(
+            "cannot use implementation='triton' for Conv2d: " + reason
+        )
+    return False
+
+
 def select_conv2d_implementation(x, weight, implementation="auto",
-                                 max_im2col_bytes=DEFAULT_IM2COL_MAX_BYTES):
+                                 max_im2col_bytes=DEFAULT_IM2COL_MAX_BYTES,
+                                 shape=None):
     """Resolve a Conv2d implementation for concrete backend arrays."""
     if implementation not in _CONV_IMPLEMENTATIONS:
         raise ValueError(
@@ -83,7 +120,11 @@ def select_conv2d_implementation(x, weight, implementation="auto",
         )
     if max_im2col_bytes <= 0:
         raise ValueError("max_im2col_bytes must be positive")
+    if shape is None:
+        shape = _conv_shape(x, weight, 1)
     if implementation == "auto":
+        if _resolve_triton_conv(x, weight, shape, explicit=False):
+            return "triton"
         return (
             "im2col" if _im2col_supported(x, weight, max_im2col_bytes)
             else "naive"
@@ -101,6 +142,8 @@ def select_conv2d_implementation(x, weight, implementation="auto",
             "one im2col work row exceeds max_im2col_bytes; increase the limit "
             "or use implementation='naive'/'auto'"
         )
+    if implementation == "triton":
+        _resolve_triton_conv(x, weight, shape, explicit=True)
     return implementation
 
 
@@ -111,16 +154,21 @@ class Conv2d(TensorOp):
         self.implementation = implementation
         self.max_im2col_bytes = max_im2col_bytes
         self.selected_implementation = None
+        self.backward_implementation = None
         self.chunk_rows = None
 
     def compute(self, x: NDArray, weight: NDArray) -> NDArray:
         shape = _conv_shape(x, weight, self.stride)
         self.selected_implementation = select_conv2d_implementation(
-            x, weight, self.implementation, self.max_im2col_bytes
+            x, weight, self.implementation, self.max_im2col_bytes, shape
         )
         if self.selected_implementation == "naive":
             self.chunk_rows = None
             return self._forward_naive(x, weight, shape)
+        if self.selected_implementation == "triton":
+            self.chunk_rows = None
+            from ..kernels.conv import forward
+            return forward(x, weight, shape)
         return self._forward_im2col(x, weight, shape)
 
     def _forward_naive(self, x, weight, shape):
@@ -192,13 +240,17 @@ class Conv2d(TensorOp):
         out_grad_data = out_grad.realize_cached_data()
         shape = _conv_shape(x_data, weight_data, self.stride)
         implementation = self.selected_implementation or select_conv2d_implementation(
-            x_data, weight_data, self.implementation, self.max_im2col_bytes
+            x_data, weight_data, self.implementation, self.max_im2col_bytes, shape
         )
         if implementation == "naive":
+            self.backward_implementation = "naive"
             grad_x, grad_weight = self._backward_naive(
                 x_data, weight_data, out_grad_data, shape
             )
         else:
+            # V5 accelerates forward only.  Triton forward intentionally uses
+            # the existing bounded im2col/CuPy-kernel backward implementation.
+            self.backward_implementation = "im2col"
             grad_x, grad_weight = self._backward_im2col(
                 x_data, weight_data, out_grad_data, shape
             )

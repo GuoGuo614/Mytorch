@@ -16,10 +16,35 @@ convolution are intentionally outside the current API.
 
 `implementation="naive"` preserves the Python-loop correctness baseline.
 `implementation="im2col"` gathers convolution windows into row chunks and
-uses the active backend's matrix multiplication. `implementation="auto"`
-selects im2col for supported floating-point shapes and otherwise falls back to
-naive. `Conv2d.selected_implementation` and `nn.Conv2d.last_implementation`
-record the resolved path for tests and diagnostics.
+uses the active backend's matrix multiplication. `implementation="triton"`
+uses an implicit-GEMM CUDA forward kernel: input-window indices are generated
+inside the kernel, so it does not allocate an im2col matrix. `auto` selects
+Triton only when its complete support contract is met, then im2col, then naive.
+
+| implementation | CPU forward/backward | CUDA forward | CUDA backward |
+| --- | --- | --- | --- |
+| `naive` | naive / naive | naive | naive |
+| `im2col` | chunked im2col / im2col | chunked im2col | im2col GEMMs + CuPy col2im kernel |
+| `triton` | unsupported | Triton implicit-GEMM | optimized im2col/CuPy fallback |
+| `auto` | im2col or naive | Triton when supported | selected path's documented backward |
+
+This is therefore a **Triton forward path**, not yet a full Triton Conv2d.
+`Conv2d.selected_implementation`/`nn.Conv2d.last_implementation` record the
+forward path. `Conv2d.backward_implementation` and
+`nn.Conv2d.last_backward_implementation` expose the backward plan/result.
+
+The Triton path requires CUDA capability 7.0+, Triton, contiguous NCHW/OIHW
+CuPy arrays on one device, matching float16/float32 dtypes, kernel dimensions
+up to 7, stride dimensions up to 4, and a reduction dimension
+`in_channels * kernel_height * kernel_width <= 4096`. Forced Triton reports a
+clear error for unsupported inputs; `auto` falls back before execution. Kernel
+execution errors and incorrect results are never silently retried on another
+path.
+
+`nn.Conv2d` materializes symmetric padding before dispatch, so the Triton
+kernel receives a contiguous padded tensor. Integer or two-dimensional padding
+continues to work at module level, including boundary tiles and non-square
+kernels/strides. Dilation and groups remain outside the public API.
 
 ## Temporary memory
 
@@ -33,6 +58,10 @@ even one work row exceeds the limit, while auto falls back to naive.
 ## Benchmark
 
 Run `python -m benchmarks.bench_conv --device cpu` or use `--device cuda`.
+On CUDA, `--implementation all --suite all` compares naive, im2col, and Triton
+over reproducible small/medium/large cases; `--suite single --shape N C H W`
+benchmarks a custom case. Every implementation gets the same warmup count and
+explicit device synchronization.
 Each JSON line reports input/weight/output shapes, requested and selected
 implementation, device, dtype, warmup/repeat counts, median, P95, peak-memory
 estimate, and im2col chunk rows. CPU memory uses `tracemalloc`; CUDA memory is
