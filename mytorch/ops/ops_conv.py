@@ -244,6 +244,9 @@ class Conv2d(TensorOp):
         grad_x = xp.zeros_like(x)
         grad_weight_rows = xp.zeros_like(weight_rows)
         kernel_elements = in_channels * kernel_h * kernel_w
+        is_cuda = type(x).__module__.split(".", 1)[0] == "cupy"
+        if is_cuda:
+            from ..kernels.conv_backward import col2im_scatter
         for start in range(0, total_rows, chunk_rows):
             end = min(start + chunk_rows, total_rows)
             columns, batch_index, base_h, base_w = self._column_chunk(
@@ -253,7 +256,10 @@ class Conv2d(TensorOp):
             grad_weight_rows += upstream.T @ columns
             del columns
             grad_columns = upstream @ weight_rows
-            for kernel_index in range(kernel_elements):
+            if is_cuda:
+                col2im_scatter(grad_columns, grad_x, start, end - start, shape)
+            else:
+                kernel_index = xp.arange(kernel_elements, dtype=xp.int64)
                 channel = kernel_index // (kernel_h * kernel_w)
                 spatial = kernel_index % (kernel_h * kernel_w)
                 offset_h = spatial // kernel_w
@@ -261,12 +267,12 @@ class Conv2d(TensorOp):
                 xp.add.at(
                     grad_x,
                     (
-                        batch_index,
-                        channel,
-                        base_h + offset_h,
-                        base_w + offset_w,
+                        batch_index[:, None],
+                        channel[None, :],
+                        base_h[:, None] + offset_h[None, :],
+                        base_w[:, None] + offset_w[None, :],
                     ),
-                    grad_columns[:, kernel_index],
+                    grad_columns,
                 )
         return grad_x, grad_weight_rows.reshape(weight.shape)
 
@@ -282,66 +288,73 @@ class MaxPool2d(TensorOp):
         self.stride = stride
 
     def compute(self, x: NDArray) -> NDArray:
-        """
-        2D最大池化的前向传播（优化版本）
-        x: (batch_size, channels, height, width)
-        output: (batch_size, channels, out_h, out_w)
-        """
         xp = get_array_module(x)
-        batch_size, channels, H, W = x.shape
-
-        out_h = (H - self.kernel_size) // self.stride + 1
-        out_w = (W - self.kernel_size) // self.stride + 1
-
-        output = xp.zeros((batch_size, channels, out_h, out_w), dtype=x.dtype)
-
-        # 优化：减少循环
-        for i in range(out_h):
-            for j in range(out_w):
-                h_start = i * self.stride
-                w_start = j * self.stride
-                h_end = h_start + self.kernel_size
-                w_end = w_start + self.kernel_size
-
-                # 提取所有batch和channel的窗口
-                window = x[:, :, h_start:h_end, w_start:w_end]
-                # (batch_size, channels, kernel_size, kernel_size) -> (batch_size, channels)
-                output[:, :, i, j] = xp.max(window, axis=(2, 3))
-
-        return output
+        windows, _ = self._windows(x)
+        return xp.max(windows, axis=(-2, -1))
 
     def gradient(self, out_grad: Tensor, node: Tensor):
-        """
-        最大池化的反向传播
-        """
         x = node.inputs[0]
         x_data = x.realize_cached_data()
         out_grad_data = out_grad.realize_cached_data()
-
-        batch_size, channels, H, W = x_data.shape
-        _, _, out_h, out_w = out_grad_data.shape
-
         xp = get_array_module(x_data)
+        windows, (out_h, out_w) = self._windows(x_data)
+        batch, channels, height, width = x_data.shape
+        kernel = self.kernel_size
+        maxima = windows.reshape(
+            batch, channels, out_h, out_w, kernel * kernel
+        ).argmax(axis=-1)
+
+        # The common non-overlapping path reconstructs NCHW directly, without
+        # atomics or scatter operations.
+        if self.stride == kernel and height == out_h * kernel \
+                and width == out_w * kernel:
+            offsets = xp.arange(kernel * kernel).reshape((1, 1, 1, 1, -1))
+            grad_windows = (
+                (offsets == maxima[..., None]).astype(x_data.dtype)
+                * out_grad_data[..., None]
+            )
+            grad_x = grad_windows.reshape(
+                batch, channels, out_h, out_w, kernel, kernel
+            ).transpose(0, 1, 2, 4, 3, 5).reshape(x_data.shape)
+            return Tensor(grad_x, device=x.device)
+
+        # General overlapping windows use one vectorized scatter call.
         grad_x = xp.zeros_like(x_data)
-
-        for b in range(batch_size):
-            for c in range(channels):
-                for i in range(out_h):
-                    for j in range(out_w):
-                        h_start = i * self.stride
-                        w_start = j * self.stride
-                        h_end = h_start + self.kernel_size
-                        w_end = w_start + self.kernel_size
-
-                        window = x_data[b, c, h_start:h_end, w_start:w_end]
-                        max_val = xp.max(window)
-
-                        # 找到最大值的位置并传递梯度
-                        mask = (window == max_val).astype(x_data.dtype)
-                        grad_x[b, c, h_start:h_end, w_start:w_end] += \
-                            mask * out_grad_data[b, c, i, j]
-
+        batch_index = xp.arange(batch).reshape((batch, 1, 1, 1))
+        channel = xp.arange(channels).reshape((1, channels, 1, 1))
+        output_y = xp.arange(out_h).reshape((1, 1, out_h, 1))
+        output_x = xp.arange(out_w).reshape((1, 1, 1, out_w))
+        input_y = output_y * self.stride + maxima // kernel
+        input_x = output_x * self.stride + maxima % kernel
+        xp.add.at(
+            grad_x,
+            (batch_index, channel, input_y, input_x),
+            out_grad_data,
+        )
         return Tensor(grad_x, device=x.device)
+
+    def _windows(self, x):
+        if x.ndim != 4:
+            raise ValueError(f"MaxPool2d expects NCHW input, got {x.shape}")
+        kernel = int(self.kernel_size)
+        stride = int(self.stride)
+        if kernel <= 0 or stride <= 0:
+            raise ValueError("MaxPool2d kernel_size and stride must be positive")
+        batch, channels, height, width = x.shape
+        out_h = (height - kernel) // stride + 1
+        out_w = (width - kernel) // stride + 1
+        if out_h <= 0 or out_w <= 0:
+            raise ValueError("MaxPool2d kernel must fit the input")
+        shape = (batch, channels, out_h, out_w, kernel, kernel)
+        strides = (
+            x.strides[0], x.strides[1], x.strides[2] * stride,
+            x.strides[3] * stride, x.strides[2], x.strides[3],
+        )
+        xp = get_array_module(x)
+        windows = xp.lib.stride_tricks.as_strided(
+            x, shape=shape, strides=strides
+        )
+        return windows, (out_h, out_w)
 
 
 def max_pool2d(x, kernel_size, stride):
