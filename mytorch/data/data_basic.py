@@ -39,6 +39,9 @@ class Dataset:
             return tuple(np.stack(component) for component in zip(*samples))
         return np.stack(samples)
 
+    def set_epoch(self, epoch):
+        """Optional hook for deterministic epoch-dependent transforms."""
+
 
 def _fetch(dataset, indices):
     return dataset.get_batch(indices)
@@ -128,6 +131,15 @@ class DataLoader:
         iterator = self._active_iterator() if self._active_iterator else None
         return 0 if iterator is None else iterator.active_workers
 
+    def set_epoch(self, epoch):
+        """Set the next epoch number used by ordering and dataset transforms."""
+        if not isinstance(epoch, (int, np.integer)) or epoch < 0:
+            raise ValueError("epoch must be a non-negative integer")
+        active = self._active_iterator() if self._active_iterator else None
+        if active is not None:
+            active.close()
+        self._epoch = int(epoch)
+
     def _make_ordering(self, epoch):
         indices = np.arange(len(self.dataset), dtype=np.int64)
         if self.shuffle:
@@ -146,6 +158,7 @@ class DataLoader:
         if active is not None:
             active.close()
         ordering = self._make_ordering(self._epoch)
+        self.dataset.set_epoch(self._epoch)
         self._epoch += 1
         self.ordering = ordering
         iterator = (_SyncDataLoaderIter(self, ordering)

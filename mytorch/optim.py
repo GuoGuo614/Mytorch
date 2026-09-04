@@ -1,6 +1,6 @@
 """Device-preserving optimizers."""
 
-from .backend import device_of, get_array_module, to_device
+from .backend import asnumpy, device_of, get_array_module, to_device
 
 
 class Optimizer:
@@ -15,6 +15,32 @@ class Optimizer:
             parameter.grad = None
 
     zero_grad = reset_grad
+
+    def state_dict(self):
+        raise NotImplementedError()
+
+    def load_state_dict(self, state_dict):
+        raise NotImplementedError()
+
+    def _load_slots(self, values, label):
+        if len(values) != len(self.params):
+            raise ValueError(
+                f"optimizer {label} has {len(values)} slots, "
+                f"expected {len(self.params)}"
+            )
+        loaded = {}
+        for parameter, value in zip(self.params, values):
+            if value is None:
+                continue
+            if tuple(value.shape) != tuple(parameter.shape):
+                raise ValueError(
+                    f"optimizer {label} shape mismatch: expected "
+                    f"{parameter.shape}, got {value.shape}"
+                )
+            loaded[parameter] = to_device(
+                value, parameter.device, dtype=parameter.dtype
+            )
+        return loaded
 
     @staticmethod
     def _gradient_data(parameter):
@@ -57,6 +83,27 @@ class SGD(Optimizer):
             parameter.cached_data = (data - self.lr * gradient).astype(
                 data.dtype, copy=False
             )
+
+    def state_dict(self):
+        return {
+            "type": "SGD",
+            "lr": self.lr,
+            "momentum": self.momentum,
+            "weight_decay": self.weight_decay,
+            "velocity": [
+                None if self.u.get(parameter) is None
+                else asnumpy(self.u[parameter]).copy()
+                for parameter in self.params
+            ],
+        }
+
+    def load_state_dict(self, state_dict):
+        if state_dict.get("type") != "SGD":
+            raise ValueError("cannot load non-SGD state into SGD")
+        self.lr = float(state_dict["lr"])
+        self.momentum = float(state_dict["momentum"])
+        self.weight_decay = float(state_dict["weight_decay"])
+        self.u = self._load_slots(state_dict["velocity"], "velocity")
 
     def clip_grad_norm(self, max_norm=0.25):
         """Clip each device-local parameter set without copying arrays to host."""
@@ -131,3 +178,36 @@ class Adam(Optimizer):
             parameter.cached_data = (
                 data - self.lr * moment_hat / (xp.sqrt(variance_hat) + self.eps)
             ).astype(data.dtype, copy=False)
+
+    def state_dict(self):
+        return {
+            "type": "Adam",
+            "lr": self.lr,
+            "beta1": self.beta1,
+            "beta2": self.beta2,
+            "eps": self.eps,
+            "weight_decay": self.weight_decay,
+            "step": self.t,
+            "first_moment": [
+                None if self.m.get(parameter) is None
+                else asnumpy(self.m[parameter]).copy()
+                for parameter in self.params
+            ],
+            "second_moment": [
+                None if self.v.get(parameter) is None
+                else asnumpy(self.v[parameter]).copy()
+                for parameter in self.params
+            ],
+        }
+
+    def load_state_dict(self, state_dict):
+        if state_dict.get("type") != "Adam":
+            raise ValueError("cannot load non-Adam state into Adam")
+        self.lr = float(state_dict["lr"])
+        self.beta1 = float(state_dict["beta1"])
+        self.beta2 = float(state_dict["beta2"])
+        self.eps = float(state_dict["eps"])
+        self.weight_decay = float(state_dict["weight_decay"])
+        self.t = int(state_dict["step"])
+        self.m = self._load_slots(state_dict["first_moment"], "first_moment")
+        self.v = self._load_slots(state_dict["second_moment"], "second_moment")

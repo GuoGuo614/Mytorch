@@ -308,6 +308,72 @@ class BatchNorm1d(Module):
         return weight_broadcasted * x_normalized + bias_broadcasted
 
 
+class BatchNorm2d(Module):
+    """Channel-wise batch normalization for NCHW feature maps."""
+
+    def __init__(self, num_features: int, eps: float = 1e-5,
+                 momentum: float = 0.1, device: Optional[Any] = None,
+                 dtype: str = "float32") -> None:
+        super().__init__()
+        if num_features <= 0:
+            raise ValueError("num_features must be positive")
+        if eps <= 0:
+            raise ValueError("eps must be positive")
+        if not 0 <= momentum <= 1:
+            raise ValueError("momentum must be in [0, 1]")
+        self.num_features = num_features
+        self.eps = eps
+        self.momentum = momentum
+        kwargs = {"device": device, "dtype": dtype}
+        self.weight = Parameter(init.ones(num_features, **kwargs))
+        self.bias = Parameter(init.zeros(num_features, **kwargs))
+        self.running_mean = init.zeros(num_features, **kwargs)
+        self.running_var = init.ones(num_features, **kwargs)
+
+    def forward(self, x: Tensor) -> Tensor:
+        if len(x.shape) != 4 or x.shape[1] != self.num_features:
+            raise ValueError(
+                "BatchNorm2d expects NCHW input with "
+                f"{self.num_features} channels, got {x.shape}"
+            )
+        batch, channels, height, width = x.shape
+        broadcast_shape = (1, channels, 1, 1)
+        if self.training:
+            count = batch * height * width
+            mean = ops.summation(x, axes=(0, 2, 3)) / count
+            centered = x - ops.broadcast_to(
+                ops.reshape(mean, broadcast_shape), x.shape
+            )
+            variance = ops.summation(
+                centered * centered, axes=(0, 2, 3)
+            ) / count
+            self.running_mean = (
+                (1 - self.momentum) * self.running_mean
+                + self.momentum * mean.data
+            )
+            self.running_var = (
+                (1 - self.momentum) * self.running_var
+                + self.momentum * variance.data
+            )
+        else:
+            mean = self.running_mean
+            variance = self.running_var
+            centered = x - ops.broadcast_to(
+                ops.reshape(mean, broadcast_shape), x.shape
+            )
+        inverse_std = ops.power_scalar(variance + self.eps, -0.5)
+        normalized = centered * ops.broadcast_to(
+            ops.reshape(inverse_std, broadcast_shape), x.shape
+        )
+        weight = ops.broadcast_to(
+            ops.reshape(self.weight, broadcast_shape), x.shape
+        )
+        bias = ops.broadcast_to(
+            ops.reshape(self.bias, broadcast_shape), x.shape
+        )
+        return normalized * weight + bias
+
+
 
 class LayerNorm(Module):
     def __init__(self, dim: int, eps: float = 1e-5,
@@ -480,6 +546,25 @@ class AvgPool2d(Module):
     def forward(self, x: Tensor) -> Tensor:
         # x shape: (batch_size, channels, height, width)
         return ops.avg_pool2d(x, kernel_size=self.kernel_size, stride=self.stride)
+
+
+class AdaptiveAvgPool2d(Module):
+    """Adaptive average pooling; V7 currently supports global output only."""
+
+    def __init__(self, output_size=1) -> None:
+        super().__init__()
+        if output_size not in {1, (1, 1)}:
+            raise NotImplementedError(
+                "AdaptiveAvgPool2d currently supports output_size=1 only"
+            )
+        self.output_size = (1, 1)
+
+    def forward(self, x: Tensor) -> Tensor:
+        if len(x.shape) != 4:
+            raise ValueError(f"AdaptiveAvgPool2d expects NCHW input, got {x.shape}")
+        batch, channels, height, width = x.shape
+        pooled = ops.summation(x, axes=(2, 3)) / (height * width)
+        return ops.reshape(pooled, (batch, channels, 1, 1))
 
 
 class Tanh(Module):
