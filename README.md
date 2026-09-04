@@ -19,6 +19,12 @@ Optional NVIDIA CUDA 12 support:
 pip install -e ".[dev,cuda]"
 ```
 
+Install the optional Triton fused kernels with:
+
+```bash
+pip install -e ".[dev,cuda,triton]"
+```
+
 The CUDA extra installs CuPy plus CUDA runtime/NVRTC component wheels; an
 NVIDIA driver is still required. Apple Silicon cannot run the CUDA/CuPy path;
 use the NumPy CPU backend there.
@@ -80,6 +86,10 @@ python -m benchmarks.bench_conv --device cuda
 ```
 
 See `docs/conv2d.md` for layout, output-shape, selection, and memory details.
+
+V4 provides forward-fused Triton implementations of Linear, Softmax,
+LayerNorm, and RMSNorm. Their backward passes intentionally remain eager.
+See `docs/fused-ops.md` for dispatch constraints and benchmarking.
 
 Expected files are under `data/MNIST/raw/`. Unit tests use synthetic inputs and
 do not require the dataset.

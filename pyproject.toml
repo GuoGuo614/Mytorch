@@ -19,7 +19,10 @@ cuda = [
     "nvidia-cuda-runtime-cu12>=12,<13",
     "nvidia-cuda-nvrtc-cu12>=12,<13",
 ]
-triton = ["triton>=2.1; platform_system == 'Linux'"]
+triton = [
+    "triton>=3.2; platform_system == 'Linux'",
+    "triton-windows>=3.2; platform_system == 'Windows'",
+]
 dashboard = ["fastapi>=0.110", "uvicorn>=0.27"]
 
 [tool.setuptools.packages.find]

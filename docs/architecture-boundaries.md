@@ -11,8 +11,10 @@ V2 keeps one operator implementation per API and selects NumPy or CuPy from
 the input array. Module migration is recursive, optimizer state follows its
 parameter device, and only explicit transfers or reporting through
 `Tensor.numpy()` may copy CUDA data to the host. The convolution implementation
-uses separately testable naive and bounded im2col paths. Triton and custom CUDA
-kernels remain outside V3.
+uses separately testable naive and bounded im2col paths. V4 adds four
+forward-only Triton fused operators behind explicit dispatch; their backward
+paths remain eager. CuPy pointers and streams connect to Triton directly,
+without a PyTorch or DLPack bridge.
 
 ## Removed legacy framework
 

@@ -168,13 +168,17 @@ class Identity(Module):
 
 
 class Linear(Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, device: Optional[Any] = None, dtype: str = "float32") -> None:
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 device: Optional[Any] = None, dtype: str = "float32",
+                 implementation: str = "auto") -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 
         kwargs = {'device': device, 'dtype': dtype}
         self.has_bias = bias
+        self.implementation = implementation
+        self.last_implementation = None
 
         self.weight = Parameter(init.kaiming_uniform(in_features, out_features, **kwargs))
         self.bias = (
@@ -188,12 +192,12 @@ class Linear(Module):
         )
 
     def forward(self, X: Tensor) -> Tensor:
-        result = ops.matmul(X, self.weight)
-
-        if self.has_bias:
-            bias = ops.broadcast_to(self.bias, result.shape)
-            result += bias
-
+        operation = ops.Linear(self.implementation)
+        result = (
+            operation(X, self.weight, self.bias)
+            if self.has_bias else operation(X, self.weight)
+        )
+        self.last_implementation = operation.selected_implementation
         return result
 
 
@@ -210,6 +214,20 @@ class Flatten(Module):
 class ReLU(Module):
     def forward(self, x: Tensor) -> Tensor:
         return ops.relu(x)
+
+
+class Softmax(Module):
+    def __init__(self, axis=-1, implementation="auto"):
+        super().__init__()
+        self.axis = axis
+        self.implementation = implementation
+        self.last_implementation = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        operation = ops.Softmax(self.axis, self.implementation)
+        result = operation(x)
+        self.last_implementation = operation.selected_implementation
+        return result
 
 class Sequential(Module):
     def __init__(self, *modules: Module) -> None:
@@ -291,34 +309,55 @@ class BatchNorm1d(Module):
 
 
 
-class LayerNorm1d(Module):
-    def __init__(self, dim: int, eps: float = 1e-5, device: Optional[Any] = None, dtype: str = "float32") -> None:
+class LayerNorm(Module):
+    def __init__(self, dim: int, eps: float = 1e-5,
+                 device: Optional[Any] = None, dtype: str = "float32",
+                 implementation: str = "auto") -> None:
         super().__init__()
         self.dim = dim
         self.eps = eps
+        self.implementation = implementation
+        self.last_implementation = None
         kwargs = {'device': device, 'dtype': dtype}
 
         self.weight = Parameter(init.ones(dim, **kwargs))
         self.bias = Parameter(init.zeros(dim, **kwargs))
 
     def forward(self, x: Tensor) -> Tensor:
-        batch_size, features = x.shape
+        if x.shape[-1] != self.dim:
+            raise ValueError(
+                f"LayerNorm expected last dimension {self.dim}, got {x.shape[-1]}"
+            )
+        operation = ops.LayerNorm(self.eps, self.implementation)
+        result = operation(x, self.weight, self.bias)
+        self.last_implementation = operation.selected_implementation
+        return result
 
-        mean = ops.summation(x, axes=(1,)) / features
-        mean_broadcasted = ops.broadcast_to(ops.reshape(mean, (batch_size, 1)), x.shape)
 
-        x_centered = x - mean_broadcasted  # x - mean
-        variance = ops.summation(x_centered * x_centered, axes=(1,)) / features
+class LayerNorm1d(LayerNorm):
+    """Backward-compatible name for last-dimension LayerNorm."""
 
-        std = ops.power_scalar(variance + self.eps, 0.5)
-        std_broadcasted = ops.broadcast_to(ops.reshape(std, (batch_size, 1)), x.shape)
 
-        x_normalized = ops.divide(x_centered, std_broadcasted)
+class RMSNorm(Module):
+    def __init__(self, dim: int, eps: float = 1e-5,
+                 device: Optional[Any] = None, dtype: str = "float32",
+                 implementation: str = "auto") -> None:
+        super().__init__()
+        self.dim = dim
+        self.eps = eps
+        self.implementation = implementation
+        self.last_implementation = None
+        self.weight = Parameter(init.ones(dim, device=device, dtype=dtype))
 
-        weight_broadcasted = ops.broadcast_to(self.weight, x.shape)
-        bias_broadcasted = ops.broadcast_to(self.bias, x.shape)
-
-        return weight_broadcasted * x_normalized + bias_broadcasted
+    def forward(self, x: Tensor) -> Tensor:
+        if x.shape[-1] != self.dim:
+            raise ValueError(
+                f"RMSNorm expected last dimension {self.dim}, got {x.shape[-1]}"
+            )
+        operation = ops.RMSNorm(self.eps, self.implementation)
+        result = operation(x, self.weight)
+        self.last_implementation = operation.selected_implementation
+        return result
 
 
 class Dropout(Module):
