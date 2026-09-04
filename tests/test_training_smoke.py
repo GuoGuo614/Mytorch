@@ -30,3 +30,34 @@ def test_tiny_linear_training_reduces_loss():
             optimizer.step()
     final = float(_mse(model(mt.Tensor(features)), mt.Tensor(targets)).numpy())
     assert final < initial * 0.05
+
+
+def test_adam_default_and_bias_corrected_first_step():
+    parameter = mt.Tensor(
+        np.array([1.0, -1.0], dtype=np.float32), requires_grad=True
+    )
+    optimizer = mt.optim.Adam([parameter])
+    (parameter * mt.Tensor(np.array([1.0, -1.0], dtype=np.float32))).sum().backward()
+    optimizer.step()
+
+    assert optimizer.lr == 0.001
+    np.testing.assert_allclose(
+        parameter.numpy(), np.array([0.999, -0.999], dtype=np.float32),
+        rtol=1e-6, atol=1e-6,
+    )
+    assert parameter in optimizer.m
+    assert parameter in optimizer.v
+
+
+def test_adam_validates_hyperparameters():
+    parameter = mt.Tensor(np.ones(1, dtype=np.float32))
+    for kwargs in (
+        {"lr": 0}, {"beta1": 1}, {"beta2": -0.1}, {"eps": 0},
+        {"weight_decay": -1e-4},
+    ):
+        try:
+            mt.optim.Adam([parameter], **kwargs)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Adam accepted invalid arguments: {kwargs}")

@@ -81,13 +81,21 @@ class Adam(Optimizer):
     def __init__(
         self,
         params,
-        lr=0.01,
+        lr=0.001,
         beta1=0.9,
         beta2=0.999,
         eps=1e-8,
         weight_decay=0.0,
     ):
         super().__init__(params)
+        if lr <= 0:
+            raise ValueError("Adam lr must be positive")
+        if not 0 <= beta1 < 1 or not 0 <= beta2 < 1:
+            raise ValueError("Adam beta1 and beta2 must be in [0, 1)")
+        if eps <= 0:
+            raise ValueError("Adam eps must be positive")
+        if weight_decay < 0:
+            raise ValueError("Adam weight_decay must be non-negative")
         self.lr = lr
         self.beta1 = beta1
         self.beta2 = beta2

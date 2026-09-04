@@ -71,11 +71,11 @@ def epoch(dataloader, model, opt=None):
 
 
 def train_mnist(
-    batch_size=100,
-    epochs=10,
+    batch_size=128,
+    epochs=5,
     optimizer=torch.optim.Adam,
     lr=0.001,
-    weight_decay=0.001,
+    weight_decay=0.0001,
     hidden_dim=100,
     data_dir=None,
     device=None,

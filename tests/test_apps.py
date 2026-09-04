@@ -11,3 +11,7 @@ def test_mnist_entrypoints_show_help_without_loading_data():
             text=True,
         )
         assert "usage:" in result.stdout.lower()
+        assert "number of epochs to train (default: 5)" in result.stdout
+        assert "input batch size for training (default: 128)" in result.stdout
+        assert "learning rate (default: 0.001)" in result.stdout
+        assert "optimizer (default: adam)" in result.stdout

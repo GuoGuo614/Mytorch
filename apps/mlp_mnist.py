@@ -3,9 +3,9 @@ import mytorch.nn as nn
 from mytorch.data import DataLoader
 from mytorch.data.datasets import MNISTDataset
 import numpy as np
-import time
 import argparse
 from pathlib import Path
+from apps.timing import Stopwatch, format_duration
 
 np.random.seed(1)
 
@@ -57,7 +57,7 @@ def train(args, model, train_loader, optimizer, epoch):
     model.train()
     loss_fn = nn.SoftmaxLoss()
 
-    epoch_start_time = time.time()
+    epoch_timer = Stopwatch()
     total_loss = 0
     total_correct = 0
     total_samples = 0
@@ -77,15 +77,10 @@ def train(args, model, train_loader, optimizer, epoch):
         total_correct += correct
         total_samples += data.shape[0]
         total_loss += loss.numpy() * data.shape[0]
+        if args.dry_run:
+            break
 
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * data.shape[0], len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.numpy()))
-            if args.dry_run:
-                break
-
-    epoch_time = time.time() - epoch_start_time
+    epoch_time = epoch_timer.elapsed()
     avg_loss = total_loss / total_samples
     avg_acc = total_correct / total_samples
 
@@ -97,7 +92,7 @@ def test(model, test_loader):
     model.eval()
     loss_fn = nn.SoftmaxLoss()
 
-    test_start_time = time.time()
+    test_timer = Stopwatch()
     test_loss = 0
     correct = 0
 
@@ -111,11 +106,7 @@ def test(model, test_loader):
 
     test_loss /= len(test_loader.dataset)
     test_acc = correct / len(test_loader.dataset)
-    test_time = time.time() - test_start_time
-
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%), Time: {:.2f}s\n'.format(
-        test_loss, int(correct), len(test_loader.dataset),
-        100. * test_acc, test_time))
+    test_time = test_timer.elapsed()
 
     return test_loss, test_acc, test_time
 
@@ -124,28 +115,35 @@ def main():
     """主函数"""
     # Training settings
     parser = argparse.ArgumentParser(description='MyTorch MLP MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=14, metavar='N',
-                        help='number of epochs to train (default: 14)')
-    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                        help='learning rate (default: 0.01)')
-    parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
-                        help='Learning rate step gamma (default: 0.7)')
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                        help='input batch size for training (default: 128)')
+    parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
+                        help='input batch size for testing (default: 128)')
+    parser.add_argument('--epochs', type=int, default=5, metavar='N',
+                        help='number of epochs to train (default: 5)')
+    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+                        help='learning rate (default: 0.001)')
+    parser.add_argument('--weight-decay', type=float, default=0.0001,
+                        help='Adam weight decay (default: 0.0001)')
+    parser.add_argument('--optimizer', choices=('adam', 'sgd'), default='adam',
+                        help='optimizer (default: adam)')
     parser.add_argument('--dry-run', action='store_true',
                         help='quickly check a single pass')
     parser.add_argument('--quick-test', action='store_true',
-                        help='quick test mode: use 1000 samples, 2 epochs')
+                        help='quick test mode: use 1000 train and 500 test samples')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
+    parser.add_argument('--log-interval', type=int, default=None,
+                        help=argparse.SUPPRESS)
     parser.add_argument('--save-model', action='store_true',
                         help='For Saving the current Model')
-    parser.add_argument('--device', choices=('cpu', 'cuda'), default='cpu',
-                        help='training device (default: cpu)')
+    parser.add_argument('--device', choices=('cpu', 'cuda'), default='cuda',
+                        help='training device (default: cuda)')
+    parser.add_argument(
+        '--data-root', type=Path,
+        default=Path(__file__).resolve().parents[1] / "data" / "MNIST" / "raw",
+        help='MNIST raw data directory (default: project data/MNIST/raw)',
+    )
     args = parser.parse_args()
 
     np.random.seed(args.seed)
@@ -153,7 +151,7 @@ def main():
 
     # 加载数据集
     print("Loading MNIST dataset...")
-    data_dir = Path(__file__).resolve().parents[1] / "data" / "MNIST" / "raw"
+    data_dir = args.data_root
     train_dataset = MNISTDataset(
         data_dir / "train-images-idx3-ubyte.gz",
         data_dir / "train-labels-idx1-ubyte.gz",
@@ -168,7 +166,7 @@ def main():
 
     # 快速测试模式：只使用部分数据
     if args.quick_test:
-        print("🚀 Quick Test Mode: Using 1000 training samples, 500 test samples, 2 epochs")
+        print("🚀 Quick Test Mode: Using 1000 training samples and 500 test samples")
         # 创建子集
         train_indices = np.arange(min(1000, len(train_dataset)))
         test_indices = np.arange(min(500, len(test_dataset)))
@@ -183,18 +181,26 @@ def main():
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, device=device)
         test_loader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, device=device)
 
-        # 修改epoch数
-        args.epochs = 2
-
     # 创建模型
     model = MLP().to(device)
 
     # 统计模型参数量
     num_params = sum(p.numpy().size for p in model.parameters())
-    print(f"Model parameters: {num_params:,}")
+    optimizer_type = torch.optim.Adam if args.optimizer == 'adam' else torch.optim.SGD
+    optimizer = optimizer_type(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
 
-    # 使用SGD优化器
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
+    print(f"device:         {'cupy()' if device.kind == 'cuda' else 'numpy()'}")
+    print(f"data_root:      {data_dir}")
+    print(f"epochs:         {args.epochs}")
+    print(f"batch_size:     {args.batch_size}")
+    print(f"optimizer:      {args.optimizer}")
+    print(f"lr:             {args.lr}")
+    print(f"weight_decay:   {args.weight_decay}")
+    print(f"train_samples:  {len(train_dataset)}")
+    print(f"test_samples:   {len(test_dataset)}")
+    print(f"model_params:   {num_params:,}")
 
     # 记录训练历史
     history = {
@@ -207,7 +213,7 @@ def main():
     }
 
     best_test_acc = 0.0
-    total_start_time = time.time()
+    total_timer = Stopwatch()
 
     print("\n" + "="*80)
     print("Starting training...")
@@ -235,18 +241,19 @@ def main():
             best_test_acc = test_acc
 
         # 打印epoch总结
-        print(f"Epoch {epoch} Summary: Train Loss={train_loss:.4f}, Train Acc={train_acc:.4f}, "
-              f"Test Loss={test_loss:.4f}, Test Acc={test_acc:.4f}, Time={epoch_time:.2f}s")
+        print(
+            f"Epoch {epoch}/{args.epochs}: "
+            f"train_loss={train_loss:.4f}, train_acc={train_acc:.4f}, "
+            f"test_loss={test_loss:.4f}, test_acc={test_acc:.4f}, "
+            f"train_time={format_duration(epoch_time)}, "
+            f"test_time={format_duration(test_time)}"
+        )
 
         # 保存loss到文件
         with open('mytorch_mlp_loss.txt', 'a') as f:
             f.write(f"{epoch}\t{train_loss:.6f}\t{test_loss:.6f}\n")
 
-        # 学习率衰减
-        if epoch % 1 == 0:
-            optimizer.lr = optimizer.lr * args.gamma
-
-    total_time = time.time() - total_start_time
+    total_time = total_timer.elapsed()
 
     # 打印最终统计
     print("\n" + "="*80)
