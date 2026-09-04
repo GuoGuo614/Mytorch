@@ -39,3 +39,8 @@ class MNISTDataset(Dataset):
 
     def __len__(self) -> int:
         return self.images.shape[0]
+
+    def get_batch(self, indices):
+        if self.transforms:
+            return super().get_batch(indices)
+        return self.images[indices], self.labels[indices]

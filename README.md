@@ -106,6 +106,21 @@ V5 extends the same CuPy-backed Triton runtime and explicit dispatch model to
 Conv2d forward. See `docs/conv2d.md` for the forward/backward support matrix,
 shape limits, fallbacks, correctness coverage, and benchmark protocol.
 
+V6 adds deterministic bounded asynchronous data loading while retaining
+`num_workers=0` as the synchronous baseline:
+
+```python
+loader = mt.data.DataLoader(
+    dataset, batch_size=128, shuffle=True, seed=7,
+    num_workers=2, prefetch_factor=2, drop_last=True,
+)
+```
+
+It also includes a lightweight reader for the official CIFAR-10 Python files
+and a synthetic throughput/TinyCNN benchmark. See `docs/dataloader.md` for
+worker cleanup, exception propagation, pinned-memory transfer boundaries,
+CIFAR-10 download instructions, and benchmark commands.
+
 Expected files are under `data/MNIST/raw/`. Unit tests use synthetic inputs and
 do not require the dataset.
 

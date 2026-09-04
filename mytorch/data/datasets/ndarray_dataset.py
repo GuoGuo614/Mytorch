@@ -9,3 +9,6 @@ class NDArrayDataset(Dataset):
 
     def __getitem__(self, i) -> object:
         return tuple([a[i] for a in self.arrays])
+
+    def get_batch(self, indices):
+        return self[indices]
