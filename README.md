@@ -142,7 +142,6 @@ do not require the dataset.
 - `benchmarks/`: reproducible command-line microbenchmarks
 - `tests/`: canonical CPU/CUDA tests
 - `docs/`: architecture and migration notes
-- `MyTorch_分阶段迁移_Codex任务书.md`: staged V0-V12 migration plan
 
 The framework is adapted from the MIT-licensed Needle educational project and
 the earlier `GuoGuo614/MyTorch-1` interface design. See `LICENSE` and the
