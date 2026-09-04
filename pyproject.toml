@@ -24,6 +24,8 @@ triton = [
     "triton-windows>=3.2; platform_system == 'Windows'",
 ]
 dashboard = ["fastapi>=0.110", "uvicorn>=0.27"]
+autodrive = ["Pillow>=9"]
+simulator = ["gym>=0.26", "gym-donkeycar"]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -231,7 +231,7 @@
 2. 数据采集器同时记录 steering 与 throttle：A/D 控制转向，W 提升油门，松开后缓慢衰减到 base throttle；所有参数可配置并写入 metadata。
 3. 支持 generated-track、mountain-track、warren-track、warehouse 等 map_name；manifest 记录 map、run_id、时间戳、图像路径、steering、throttle。不要只把标签编码进文件名。
 4. 提供数据校验/汇总脚本：坏图、缺失标签、重复帧、每地图样本数、steering/throttle 分布、8:2 group split。
-5. 闭环推理同时使用模型预测 steering 和 throttle，带范围裁剪、平滑、失联/异常时的安全固定油门或刹停策略；不得继续无条件固定 throttle=0.2。
+5. 闭环推理同时使用模型预测 steering 和 throttle；训练数据没有 throttle 时，固定为 0.2
 6. 实现针对 steering head 的 Grad-CAM：使用最后一个卷积特征和框架自身 autograd，输出叠加图；可选支持 throttle head。不要为了 Grad-CAM 引入 PyTorch hooks。
 7. 加 mock simulator 单元测试，验证动态油门状态机、manifest、控制裁剪、异常降级和 Grad-CAM 输出尺寸；真实模拟器实验单独记录。
 8. 更新 apps/autodrive/README：采集→校验→训练→评估→驾驶→Grad-CAM 的完整命令。
