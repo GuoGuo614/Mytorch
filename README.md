@@ -123,13 +123,17 @@ CIFAR-10 download instructions, and benchmark commands.
 
 V7 adds framework `BatchNorm2d`/global adaptive average pooling, portable NPZ
 model+optimizer checkpoints, and a new MyTorch dual-head lightweight ResNet in
-`apps/autodrive`. Its manifest-only dataset keeps whole drive/map groups out of
-the opposite split. See `apps/autodrive/README.md` for legacy DonkeyCar manifest
+`apps/autodrive`. Its manifest-only dataset uses per-map grouped splits
+(frame-number blocks for legacy data, real runs for new collections).
+See `apps/autodrive/README.md` for legacy DonkeyCar manifest
 conversion, training, resume, and evaluation commands. The Paddle directory is
 reference code only. The AutoDrive package now also loads paired JSON/NPZ
 artifacts for safe, smoothed, dual-head closed-loop driving through an isolated
-Gym DonkeyCar adapter. Data collection and Grad-CAM remain scoped to later V8
-work; no real-track result is claimed.
+Gym DonkeyCar adapter. V8 adds keyboard steering/dynamic-throttle collection,
+timestamped per-run records, image/label auditing, per-map grouped splitting,
+and steering/throttle Grad-CAM using MyTorch autograd. Run
+`python -m apps.autodrive --help` for the unified entry point and see the app
+README for the complete workflow. No real-track result is claimed.
 
 Expected files are under `data/MNIST/raw/`. Unit tests use synthetic inputs and
 do not require the dataset.
