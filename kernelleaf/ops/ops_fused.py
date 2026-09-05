@@ -82,7 +82,7 @@ class Linear(TensorOp):
             if dtypes_match else "eager"
         )
         if self.selected_implementation == "triton":
-            kernel = importlib.import_module("mytorch.kernels.linear")
+            kernel = importlib.import_module("kernelleaf.kernels.linear")
             return kernel.forward(x, weight, bias)
         result = get_array_module(x).matmul(x, weight)
         return result if bias is None else result + bias
@@ -120,7 +120,7 @@ class Softmax(TensorOp):
             self.implementation, (x,), "Softmax", axis
         )
         if self.selected_implementation == "triton":
-            return importlib.import_module("mytorch.kernels.softmax").forward(x)
+            return importlib.import_module("kernelleaf.kernels.softmax").forward(x)
         xp = get_array_module(x)
         shifted = x - xp.max(x, axis=axis, keepdims=True)
         numerator = xp.exp(shifted)
@@ -148,7 +148,7 @@ class LayerNorm(TensorOp):
             self.implementation, (x, weight, bias), "LayerNorm"
         )
         if self.selected_implementation == "triton":
-            kernel = importlib.import_module("mytorch.kernels.layernorm")
+            kernel = importlib.import_module("kernelleaf.kernels.layernorm")
             return kernel.forward(x, weight, bias, self.epsilon)
         xp = get_array_module(x)
         mean = xp.mean(x, axis=-1, keepdims=True)
@@ -195,7 +195,7 @@ class RMSNorm(TensorOp):
             self.implementation, (x, weight), "RMSNorm"
         )
         if self.selected_implementation == "triton":
-            kernel = importlib.import_module("mytorch.kernels.rmsnorm")
+            kernel = importlib.import_module("kernelleaf.kernels.rmsnorm")
             return kernel.forward(x, weight, self.epsilon)
         xp = get_array_module(x)
         mean_square = xp.mean(x * x, axis=-1, keepdims=True)

@@ -78,7 +78,7 @@ def inspect_checkpoint(path):
     """Read lightweight checkpoint metadata without constructing a model."""
     with np.load(Path(path), allow_pickle=False) as archive:
         if "__metadata__" not in archive:
-            raise ValueError("not a MyTorch checkpoint: metadata is missing")
+            raise ValueError("not a KernelLeaf checkpoint: metadata is missing")
         encoded = json.loads(str(archive["__metadata__"].item()))
     version = encoded.get("format_version")
     if version != FORMAT_VERSION:
@@ -99,7 +99,7 @@ def load_checkpoint(path, model, optimizer=None, *, strict=True):
     source = Path(path)
     with np.load(source, allow_pickle=False) as archive:
         if "__metadata__" not in archive:
-            raise ValueError("not a MyTorch checkpoint: metadata is missing")
+            raise ValueError("not a KernelLeaf checkpoint: metadata is missing")
         encoded = json.loads(str(archive["__metadata__"].item()))
         payload = _decode(encoded, archive)
     version = payload.get("format_version")

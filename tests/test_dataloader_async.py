@@ -6,9 +6,9 @@ import time
 import numpy as np
 import pytest
 
-import mytorch as mt
-from mytorch.data import DataLoader, Dataset
-from mytorch.data.datasets import CIFAR10Dataset, NDArrayDataset
+import kernelleaf as kl
+from kernelleaf.data import DataLoader, Dataset
+from kernelleaf.data.datasets import CIFAR10Dataset, NDArrayDataset
 
 
 def _values(loader):
@@ -111,12 +111,12 @@ def test_early_close_and_implicit_break_release_resources():
     assert not iterator.state.producer.is_alive()
 
     before = {thread.name for thread in threading.enumerate()
-              if thread.name.startswith("mytorch-loader-")}
+              if thread.name.startswith("kernelleaf-loader-")}
     for _ in loader:
         break
     gc.collect()
     after = {thread.name for thread in threading.enumerate()
-             if thread.name.startswith("mytorch-loader-")}
+             if thread.name.startswith("kernelleaf-loader-")}
     assert after == before
 
 
@@ -179,17 +179,17 @@ def test_cifar10_missing_files_explain_download(tmp_path):
         CIFAR10Dataset(tmp_path)
 
 
-@pytest.mark.skipif(not mt.is_cuda_available(), reason="CUDA is unavailable")
+@pytest.mark.skipif(not kl.is_cuda_available(), reason="CUDA is unavailable")
 def test_async_pinned_batch_transfer_to_cuda():
     dataset = NDArrayDataset(
         np.arange(12, dtype=np.float32).reshape(6, 2),
         np.arange(6, dtype=np.int64),
     )
     loader = DataLoader(
-        dataset, batch_size=3, device=mt.cuda(0), num_workers=2,
+        dataset, batch_size=3, device=kl.cuda(0), num_workers=2,
         prefetch_factor=2, pin_memory=True,
     )
     features, labels = next(iter(loader))
-    assert features.device == mt.cuda(0)
-    assert labels.device == mt.cuda(0)
+    assert features.device == kl.cuda(0)
+    assert labels.device == kl.cuda(0)
     np.testing.assert_array_equal(features.numpy(), dataset.arrays[0][:3])

@@ -2,10 +2,10 @@
 """
 import math
 from typing import Any, Optional
-from mytorch.autograd import Tensor
-from mytorch import ops
-import mytorch.init as init
-from mytorch.backend import Device, cpu, cuda, to_device
+from kernelleaf.autograd import Tensor
+from kernelleaf import ops
+import kernelleaf.init as init
+from kernelleaf.backend import Device, cpu, cuda, to_device
 
 
 class Parameter(Tensor):

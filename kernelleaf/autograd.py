@@ -1,13 +1,13 @@
 """Core data structures."""
-import mytorch
+import kernelleaf
 from typing import List, Optional, NamedTuple, Tuple, Union, Dict
 from collections import namedtuple
 import numpy
 
-from mytorch import init
+from kernelleaf import init
 from .backend import Device, asnumpy, cpu, device_of, to_device
 
-# mytorch version
+# kernelleaf version
 LAZY_MODE = False
 TENSOR_COUNTER = 0
 
@@ -173,13 +173,13 @@ class TensorTuple(Value):
         return len(cdata)
 
     def __getitem__(self, index: int):
-        return mytorch.ops.tuple_get_item(self, index)
+        return kernelleaf.ops.tuple_get_item(self, index)
 
     def tuple(self):
         return tuple([x for x in self])
 
     def __repr__(self):
-        return "mytorch.TensorTuple" + str(self.tuple())
+        return "kernelleaf.TensorTuple" + str(self.tuple())
 
     def __str__(self):
         return self.__repr__()
@@ -187,7 +187,7 @@ class TensorTuple(Value):
     def __add__(self, other):
         assert isinstance(other, TensorTuple)
         assert len(self) == len(other)
-        return mytorch.ops.make_tuple(*[self[i] + other[i] for i in range(len(self))])
+        return kernelleaf.ops.make_tuple(*[self[i] + other[i] for i in range(len(self))])
 
     def detach(self):
         """Create a new tensor that shares the data but detaches from the graph."""
@@ -326,7 +326,7 @@ class Tensor(Value):
 
     def __repr__(self):
         return (
-            "mytorch.Tensor(" + str(self.realize_cached_data())
+            "kernelleaf.Tensor(" + str(self.realize_cached_data())
             + f", device={self.device})"
         )
 
@@ -338,54 +338,54 @@ class Tensor(Value):
 
     def __add__(self, other):
         if isinstance(other, Tensor):
-            return mytorch.ops.EWiseAdd()(self, other)
+            return kernelleaf.ops.EWiseAdd()(self, other)
         else:
-            return mytorch.ops.AddScalar(other)(self)
+            return kernelleaf.ops.AddScalar(other)(self)
 
     def __mul__(self, other):
         if isinstance(other, Tensor):
-            return mytorch.ops.EWiseMul()(self, other)
+            return kernelleaf.ops.EWiseMul()(self, other)
         else:
-            return mytorch.ops.MulScalar(other)(self)
+            return kernelleaf.ops.MulScalar(other)(self)
 
     def __pow__(self, other):
         if isinstance(other, Tensor):
-            return mytorch.ops.EWisePow()(self, other)
+            return kernelleaf.ops.EWisePow()(self, other)
         else:
-            return mytorch.ops.PowerScalar(other)(self)
+            return kernelleaf.ops.PowerScalar(other)(self)
 
     def __sub__(self, other):
         if isinstance(other, Tensor):
-            return mytorch.ops.EWiseAdd()(self, mytorch.ops.Negate()(other))
+            return kernelleaf.ops.EWiseAdd()(self, kernelleaf.ops.Negate()(other))
         else:
-            return mytorch.ops.AddScalar(-other)(self)
+            return kernelleaf.ops.AddScalar(-other)(self)
 
     def __truediv__(self, other):
         if isinstance(other, Tensor):
-            return mytorch.ops.EWiseDiv()(self, other)
+            return kernelleaf.ops.EWiseDiv()(self, other)
         else:
-            return mytorch.ops.DivScalar(other)(self)
+            return kernelleaf.ops.DivScalar(other)(self)
 
     def __matmul__(self, other):
-        return mytorch.ops.MatMul()(self, other)
+        return kernelleaf.ops.MatMul()(self, other)
 
     def matmul(self, other):
-        return mytorch.ops.MatMul()(self, other)
+        return kernelleaf.ops.MatMul()(self, other)
 
     def sum(self, axes=None):
-        return mytorch.ops.Summation(axes)(self)
+        return kernelleaf.ops.Summation(axes)(self)
 
     def broadcast_to(self, shape):
-        return mytorch.ops.BroadcastTo(shape)(self)
+        return kernelleaf.ops.BroadcastTo(shape)(self)
 
     def reshape(self, shape):
-        return mytorch.ops.Reshape(shape)(self)
+        return kernelleaf.ops.Reshape(shape)(self)
 
     def __neg__(self):
-        return mytorch.ops.Negate()(self)
+        return kernelleaf.ops.Negate()(self)
 
     def transpose(self, axes=None):
-        return mytorch.ops.Transpose(axes)(self)
+        return kernelleaf.ops.Transpose(axes)(self)
 
     __radd__ = __add__
     __rmul__ = __mul__

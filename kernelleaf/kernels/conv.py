@@ -1,6 +1,6 @@
 """Triton implicit-GEMM Conv2d forward kernel.
 
-Adapted to MyTorch's NCHW/OIHW TensorOp API and direct CuPy pointers from
+Adapted to KernelLeaf's NCHW/OIHW TensorOp API and direct CuPy pointers from
 GuoGuo614/MyTorch-1.  Backward remains on the optimized im2col/CuPy path.
 """
 

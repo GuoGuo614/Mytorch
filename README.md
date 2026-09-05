@@ -1,6 +1,6 @@
-# MyTorch
+# KernelLeaf
 
-MyTorch is a compact educational deep-learning framework built around an
+KernelLeaf is a compact educational deep-learning framework built around an
 explicit `TensorOp.compute` / `TensorOp.gradient` computation graph. NumPy is
 the baseline CPU backend; CuPy provides an optional, lazily loaded CUDA array
 backend. PyTorch is not a runtime dependency.
@@ -33,9 +33,9 @@ use the NumPy CPU backend there.
 
 ```python
 import numpy as np
-import mytorch as mt
+import kernelleaf as kl
 
-x = mt.Tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
+x = kl.Tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
 loss = (x * x).sum()
 loss.backward()
 
@@ -46,8 +46,8 @@ print(x.grad.numpy()) # [2. 4. 6.]
 Device transfers are explicit:
 
 ```python
-x_cpu = mt.Tensor([1, 2, 3], dtype="float32")
-if mt.is_cuda_available():
+x_cpu = kl.Tensor([1, 2, 3], dtype="float32")
+if kl.is_cuda_available():
     x_gpu = x_cpu.cuda(0)
     x_cpu_again = x_gpu.cpu()
 ```
@@ -56,7 +56,7 @@ Modules recursively move parameters, running-statistic buffers, and existing
 gradients. State loading preserves the destination device and dtype:
 
 ```python
-model = mt.nn.Linear(3, 2).to(mt.cuda(0))
+model = kl.nn.Linear(3, 2).to(kl.cuda(0))
 state = model.state_dict()
 model.load_state_dict(state)
 ```
@@ -78,7 +78,7 @@ im2col/CuPy-kernel path. CPU and unsupported CUDA inputs fall back to bounded
 im2col, then naive:
 
 ```python
-conv = mt.nn.Conv2d(3, 16, 3, padding=1, implementation="auto")
+conv = kl.nn.Conv2d(3, 16, 3, padding=1, implementation="auto")
 ```
 
 | Conv2d path | CPU forward | CUDA forward | backward |
@@ -110,7 +110,7 @@ V6 adds deterministic bounded asynchronous data loading while retaining
 `num_workers=0` as the synchronous baseline:
 
 ```python
-loader = mt.data.DataLoader(
+loader = kl.data.DataLoader(
     dataset, batch_size=128, shuffle=True, seed=7,
     num_workers=2, prefetch_factor=2, drop_last=True,
 )
@@ -122,7 +122,7 @@ worker cleanup, exception propagation, pinned-memory transfer boundaries,
 CIFAR-10 download instructions, and benchmark commands.
 
 V7 adds framework `BatchNorm2d`/global adaptive average pooling, portable NPZ
-model+optimizer checkpoints, and a new MyTorch dual-head lightweight ResNet in
+model+optimizer checkpoints, and a new KernelLeaf dual-head lightweight ResNet in
 `apps/autodrive`. Its manifest-only dataset uses per-map grouped splits
 (frame-number blocks for legacy data, real runs for new collections).
 See `apps/autodrive/README.md` for legacy DonkeyCar manifest
@@ -131,7 +131,7 @@ reference code only. The AutoDrive package now also loads paired JSON/NPZ
 artifacts for safe, smoothed, dual-head closed-loop driving through an isolated
 Gym DonkeyCar adapter. V8 adds keyboard steering/dynamic-throttle collection,
 timestamped per-run records, image/label auditing, per-map grouped splitting,
-and steering/throttle Grad-CAM using MyTorch autograd. Run
+and steering/throttle Grad-CAM using KernelLeaf autograd. Run
 `python -m apps.autodrive --help` for the unified entry point and see the app
 README for the complete workflow. No real-track result is claimed.
 
@@ -140,7 +140,7 @@ do not require the dataset.
 
 ## Repository layout
 
-- `mytorch/`: canonical framework and NumPy/CuPy device API
+- `kernelleaf/`: canonical framework and NumPy/CuPy device API
 - `apps/`: canonical runnable examples
 - `examples/`: small backend and migration smoke programs
 - `benchmarks/`: reproducible command-line microbenchmarks

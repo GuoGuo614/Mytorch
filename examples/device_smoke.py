@@ -3,8 +3,8 @@
 import argparse
 import numpy as np
 
-import mytorch as mt
-import mytorch.nn as nn
+import kernelleaf as kl
+import kernelleaf.nn as nn
 
 
 def _model(device):
@@ -16,19 +16,19 @@ def _model(device):
 
 
 def train_on_device(device, initial_state, steps=30):
-    inputs = mt.Tensor(
+    inputs = kl.Tensor(
         np.array([[-2, -1], [-1, -2], [1, 2], [2, 1]], dtype=np.float32),
         device=device,
         requires_grad=False,
     )
-    labels = mt.Tensor(
+    labels = kl.Tensor(
         np.array([0, 0, 1, 1], dtype=np.int32),
         device=device,
         requires_grad=False,
     )
     model = _model(device)
     model.load_state_dict(initial_state)
-    optimizer = mt.optim.SGD(model.parameters(), lr=0.08)
+    optimizer = kl.optim.SGD(model.parameters(), lr=0.08)
     loss_fn = nn.SoftmaxLoss()
     losses = []
     for _ in range(steps):
@@ -42,10 +42,10 @@ def train_on_device(device, initial_state, steps=30):
 
 def run(include_cuda=True, steps=30):
     np.random.seed(7)
-    initial_state = _model(mt.cpu()).state_dict()
-    results = {"cpu": train_on_device(mt.cpu(), initial_state, steps)}
-    if include_cuda and mt.is_cuda_available():
-        results["cuda:0"] = train_on_device(mt.cuda(0), initial_state, steps)
+    initial_state = _model(kl.cpu()).state_dict()
+    results = {"cpu": train_on_device(kl.cpu(), initial_state, steps)}
+    if include_cuda and kl.is_cuda_available():
+        results["cuda:0"] = train_on_device(kl.cuda(0), initial_state, steps)
     for name, losses in results.items():
         if losses[-1] >= losses[0]:
             raise RuntimeError(f"{name} loss did not decrease: {losses[0]} -> {losses[-1]}")

@@ -1,5 +1,5 @@
 from ..autograd import Op, Tensor, TensorTuple, Value, TensorOp, TensorTupleOp
-import mytorch.init as init
+import kernelleaf.init as init
 
 class MakeTensorTuple(TensorTupleOp):
     def compute(self, *args) -> tuple:

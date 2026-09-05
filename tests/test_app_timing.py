@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from apps.timing import Stopwatch, format_duration
-from mytorch.data import DataLoader
-from mytorch.data.datasets import NDArrayDataset
+from kernelleaf.data import DataLoader
+from kernelleaf.data.datasets import NDArrayDataset
 
 
 def test_stopwatch_reports_elapsed_time():

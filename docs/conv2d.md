@@ -1,6 +1,6 @@
 # Conv2d implementations
 
-MyTorch Conv2d keeps one public layout on every backend:
+KernelLeaf Conv2d keeps one public layout on every backend:
 
 - input: NCHW `(batch, in_channels, height, width)`;
 - weight: OIHW `(out_channels, in_channels, kernel_height, kernel_width)`;

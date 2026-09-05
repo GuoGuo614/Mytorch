@@ -3,8 +3,8 @@
 import argparse
 import json
 
-import mytorch as mt
-from mytorch.data import DataLoader
+import kernelleaf as kl
+from kernelleaf.data import DataLoader
 
 from .dataset import AutoDriveDataset
 from .model import AutoDriveResNet
@@ -37,8 +37,8 @@ def main():
     selected_maps = selected_manifest_maps(args.manifest, args.maps)
     if args.checkpoint is None:
         args.checkpoint = str(default_checkpoint_path(selected_maps))
-    device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
-    checkpoint = mt.inspect_checkpoint(args.checkpoint)
+    device = kl.cuda(0) if args.device == "cuda" else kl.cpu()
+    checkpoint = kl.inspect_checkpoint(args.checkpoint)
     config = checkpoint["config"]
     normalization = checkpoint["normalization"]
     image_size = tuple(config.get(
@@ -51,7 +51,7 @@ def main():
         throttle_max=config.get("throttle_max", args.throttle_max),
         device=device,
     )
-    metadata = mt.load_checkpoint(args.checkpoint, model)
+    metadata = kl.load_checkpoint(args.checkpoint, model)
     dataset = AutoDriveDataset(
         args.manifest, "val", image_size=image_size, augment=False,
         mean=normalization.get("mean", (0.485, 0.456, 0.406)),

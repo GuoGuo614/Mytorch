@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
 
-import mytorch as mt
+import kernelleaf as kl
 
 
-DEVICES = [mt.cpu()]
-if mt.is_cuda_available():
-    DEVICES.append(mt.cuda(0))
+DEVICES = [kl.cpu()]
+if kl.is_cuda_available():
+    DEVICES.append(kl.cuda(0))
 
 
 def _pool_reference(values, upstream, kernel, stride):
@@ -44,9 +44,9 @@ def test_vectorized_maxpool_forward_backward_matches_reference(
         values, upstream, kernel, stride
     )
 
-    x = mt.Tensor(values, device=device, requires_grad=True)
-    output = mt.ops.max_pool2d(x, kernel_size=kernel, stride=stride)
-    (output * mt.Tensor(upstream, device=device, requires_grad=False)).sum().backward()
+    x = kl.Tensor(values, device=device, requires_grad=True)
+    output = kl.ops.max_pool2d(x, kernel_size=kernel, stride=stride)
+    (output * kl.Tensor(upstream, device=device, requires_grad=False)).sum().backward()
 
     np.testing.assert_allclose(output.numpy(), expected_output)
     np.testing.assert_allclose(x.grad.numpy(), expected_gradient, rtol=1e-6, atol=1e-6)
@@ -54,22 +54,22 @@ def test_vectorized_maxpool_forward_backward_matches_reference(
 
 def test_maxpool_validates_shape_kernel_and_stride():
     with pytest.raises(ValueError, match="NCHW"):
-        mt.ops.max_pool2d(mt.Tensor(np.ones((2, 3, 4))), 2, 2)
+        kl.ops.max_pool2d(kl.Tensor(np.ones((2, 3, 4))), 2, 2)
     with pytest.raises(ValueError, match="positive"):
-        mt.ops.max_pool2d(mt.Tensor(np.ones((1, 1, 4, 4))), 0, 1)
+        kl.ops.max_pool2d(kl.Tensor(np.ones((1, 1, 4, 4))), 0, 1)
     with pytest.raises(ValueError, match="fit"):
-        mt.ops.max_pool2d(mt.Tensor(np.ones((1, 1, 2, 2))), 3, 1)
+        kl.ops.max_pool2d(kl.Tensor(np.ones((1, 1, 2, 2))), 3, 1)
 
 
 def test_maxpool_ties_route_gradient_to_first_maximum():
-    x = mt.Tensor(np.ones((1, 1, 2, 2), dtype=np.float32), requires_grad=True)
-    mt.ops.max_pool2d(x, kernel_size=2, stride=2).sum().backward()
+    x = kl.Tensor(np.ones((1, 1, 2, 2), dtype=np.float32), requires_grad=True)
+    kl.ops.max_pool2d(x, kernel_size=2, stride=2).sum().backward()
     np.testing.assert_array_equal(
         x.grad.numpy(), np.array([[[[1, 0], [0, 0]]]], dtype=np.float32)
     )
 
 
-@pytest.mark.skipif(not mt.is_cuda_available(), reason="working CUDA/CuPy unavailable")
+@pytest.mark.skipif(not kl.is_cuda_available(), reason="working CUDA/CuPy unavailable")
 @pytest.mark.parametrize("dtype", [np.float16, np.float32, np.float64])
 def test_cuda_col2im_raw_kernel_supports_float_dtypes(dtype):
     rng = np.random.default_rng(22)
@@ -78,11 +78,11 @@ def test_cuda_col2im_raw_kernel_supports_float_dtypes(dtype):
     upstream = rng.normal(size=(1, 3, 3, 5)).astype(dtype)
 
     def run(implementation):
-        x = mt.Tensor(values, device=mt.cuda(0), requires_grad=True)
-        weight = mt.Tensor(weights, device=mt.cuda(0), requires_grad=True)
-        output = mt.ops.Conv2d(implementation=implementation)(x, weight)
-        (output * mt.Tensor(
-            upstream, device=mt.cuda(0), requires_grad=False
+        x = kl.Tensor(values, device=kl.cuda(0), requires_grad=True)
+        weight = kl.Tensor(weights, device=kl.cuda(0), requires_grad=True)
+        output = kl.ops.Conv2d(implementation=implementation)(x, weight)
+        (output * kl.Tensor(
+            upstream, device=kl.cuda(0), requires_grad=False
         )).sum().backward()
         return output.numpy(), x.grad.numpy(), weight.grad.numpy()
 

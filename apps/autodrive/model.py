@@ -1,6 +1,6 @@
-"""A small MyTorch ResNet with steering and bounded-throttle heads."""
+"""A small KernelLeaf ResNet with steering and bounded-throttle heads."""
 
-import mytorch.nn as nn
+import kernelleaf.nn as nn
 
 
 class BasicBlock(nn.Module):

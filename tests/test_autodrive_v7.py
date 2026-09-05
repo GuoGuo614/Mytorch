@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 from PIL import Image
 
-import mytorch as mt
-import mytorch.nn as nn
-from mytorch.data import DataLoader
+import kernelleaf as kl
+import kernelleaf.nn as nn
+from kernelleaf.data import DataLoader
 from apps.autodrive.dataset import AutoDriveDataset
 from apps.autodrive.manifest import (
     REQUIRED_FIELDS, build_legacy_records, write_manifest,
@@ -41,7 +41,7 @@ def _tiny_manifest(tmp_path):
 
 def test_batchnorm2d_and_global_pool_forward_backward_and_eval():
     rng = np.random.default_rng(2)
-    values = mt.Tensor(
+    values = kl.Tensor(
         rng.normal(size=(3, 4, 5, 7)).astype(np.float32), requires_grad=True
     )
     norm = nn.BatchNorm2d(4)
@@ -131,16 +131,16 @@ def test_manifest_dataset_preprocess_and_train_only_augmentation(tmp_path):
 
 def _training_values(batch=4, device=None):
     rng = np.random.default_rng(4)
-    inputs = mt.Tensor(
+    inputs = kl.Tensor(
         rng.normal(size=(batch, 3, 16, 16)).astype(np.float32),
         device=device,
         requires_grad=False,
     )
-    steering = mt.Tensor(
+    steering = kl.Tensor(
         np.zeros((batch, 1), dtype=np.float32), device=device,
         requires_grad=False,
     )
-    throttle = mt.Tensor(
+    throttle = kl.Tensor(
         np.full((batch, 1), 0.3, dtype=np.float32), device=device,
         requires_grad=False,
     )
@@ -165,7 +165,7 @@ def test_dual_head_shapes_ranges_gradients_and_loss_decrease():
     model = AutoDriveResNet(
         base_channels=2, throttle_min=0.1, throttle_max=0.5
     )
-    optimizer = mt.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = kl.optim.Adam(model.parameters(), lr=1e-3)
     values = _training_values()
     steering, throttle = model(values[0])
     assert steering.shape == throttle.shape == (4, 1)
@@ -188,7 +188,7 @@ def test_synthetic_manifest_runs_one_training_epoch(tmp_path):
     )
     loader = DataLoader(dataset, batch_size=4, shuffle=True, seed=3)
     model = AutoDriveResNet(base_channels=2)
-    optimizer = mt.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = kl.optim.Adam(model.parameters(), lr=1e-3)
     metrics = train_epoch(model, loader, optimizer, lambda_throttle=0.5)
     assert metrics["samples"] == 4
     assert metrics["loss"] >= 0
@@ -199,16 +199,16 @@ def test_synthetic_manifest_runs_one_training_epoch(tmp_path):
 def test_checkpoint_restores_model_optimizer_and_metadata(tmp_path):
     np.random.seed(8)
     model = AutoDriveResNet(base_channels=2, throttle_min=0.1, throttle_max=0.5)
-    optimizer = mt.optim.Adam(model.parameters(), lr=2e-3, weight_decay=1e-4)
+    optimizer = kl.optim.Adam(model.parameters(), lr=2e-3, weight_decay=1e-4)
     values = _training_values()
     _step(model, optimizer, values)
     path = tmp_path / "resume.npz"
-    mt.save_checkpoint(
+    kl.save_checkpoint(
         path, model, optimizer, epoch=3,
         config={"base_channels": 2},
         normalization={"mean": [0.1, 0.2, 0.3], "std": [1, 1, 1]},
     )
-    assert mt.inspect_checkpoint(path) == {
+    assert kl.inspect_checkpoint(path) == {
         "epoch": 3,
         "config": {"base_channels": 2},
         "normalization": {
@@ -219,8 +219,8 @@ def test_checkpoint_restores_model_optimizer_and_metadata(tmp_path):
     restored = AutoDriveResNet(
         base_channels=2, throttle_min=0.1, throttle_max=0.5
     )
-    restored_optimizer = mt.optim.Adam(restored.parameters(), lr=9e-2)
-    metadata = mt.load_checkpoint(path, restored, restored_optimizer)
+    restored_optimizer = kl.optim.Adam(restored.parameters(), lr=9e-2)
+    metadata = kl.load_checkpoint(path, restored, restored_optimizer)
     assert metadata == {
         "epoch": 3,
         "config": {"base_channels": 2},
@@ -244,13 +244,13 @@ def test_checkpoint_restores_model_optimizer_and_metadata(tmp_path):
         )
 
 
-@pytest.mark.skipif(not mt.is_cuda_available(), reason="CUDA is unavailable")
+@pytest.mark.skipif(not kl.is_cuda_available(), reason="CUDA is unavailable")
 def test_autodrive_cuda_forward_backward_optimizer_step():
-    device = mt.cuda(0)
+    device = kl.cuda(0)
     model = AutoDriveResNet(
         base_channels=2, throttle_min=0.1, throttle_max=0.5, device=device
     )
-    optimizer = mt.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = kl.optim.Adam(model.parameters(), lr=1e-3)
     loss = _step(model, optimizer, _training_values(batch=2, device=device))
     device.xp.cuda.get_current_stream().synchronize()
     assert np.isfinite(loss)

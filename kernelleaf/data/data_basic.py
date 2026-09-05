@@ -107,7 +107,7 @@ class DataLoader:
         if not isinstance(seed, (int, np.integer)):
             raise TypeError("seed must be an integer")
         if device is not None and not isinstance(device, Device):
-            raise TypeError("device must be a mytorch Device or None")
+            raise TypeError("device must be a kernelleaf Device or None")
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = bool(shuffle)
@@ -284,7 +284,7 @@ class _AsyncLoaderState:
         self.results = queue.Queue(maxsize=self.capacity)
         self.slots = threading.BoundedSemaphore(self.capacity)
         self.stop_event = threading.Event()
-        prefix = f"mytorch-loader-{id(self):x}"
+        prefix = f"kernelleaf-loader-{id(self):x}"
         self.workers = [
             threading.Thread(
                 target=_worker_loop,

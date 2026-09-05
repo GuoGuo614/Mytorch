@@ -8,7 +8,7 @@ import time
 
 import numpy as np
 
-import mytorch as mt
+import kernelleaf as kl
 
 
 OPERATORS = ("linear", "softmax", "layernorm", "rmsnorm")
@@ -25,29 +25,29 @@ def _sync(device):
 
 def _make_case(name, args, implementation, requires_grad):
     rng = np.random.default_rng(args.seed)
-    device = mt.cuda(0)
+    device = kl.cuda(0)
     shape = (args.rows, args.columns)
 
     def tensor(values, grad=requires_grad):
-        return mt.Tensor(values.astype(args.dtype), device=device, requires_grad=grad)
+        return kl.Tensor(values.astype(args.dtype), device=device, requires_grad=grad)
 
     x = tensor(rng.normal(size=shape))
     if name == "linear":
         weight = tensor(rng.normal(size=(args.columns, args.out_features)))
         bias = tensor(rng.normal(size=(1, args.out_features)))
-        op = mt.ops.Linear(implementation)
+        op = kl.ops.Linear(implementation)
         inputs = (x, weight, bias)
     elif name == "softmax":
-        op = mt.ops.Softmax(-1, implementation)
+        op = kl.ops.Softmax(-1, implementation)
         inputs = (x,)
     elif name == "layernorm":
         weight = tensor(rng.normal(size=(args.columns,)))
         bias = tensor(rng.normal(size=(args.columns,)))
-        op = mt.ops.LayerNorm(args.epsilon, implementation)
+        op = kl.ops.LayerNorm(args.epsilon, implementation)
         inputs = (x, weight, bias)
     else:
         weight = tensor(rng.normal(size=(args.columns,)))
-        op = mt.ops.RMSNorm(args.epsilon, implementation)
+        op = kl.ops.RMSNorm(args.epsilon, implementation)
         inputs = (x, weight)
     return op, inputs
 
@@ -66,7 +66,7 @@ def _time(call, device, warmup, repeats):
 
 
 def benchmark_one(name, implementation, args):
-    device = mt.cuda(0)
+    device = kl.cuda(0)
     forward_op, forward_inputs = _make_case(name, args, implementation, False)
 
     def forward():
@@ -123,7 +123,7 @@ def main():
     parser.add_argument("--repeats", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
-    if not mt.is_cuda_available():
+    if not kl.is_cuda_available():
         parser.error("a working CUDA/CuPy device is required")
     operators = OPERATORS if args.operator == "all" else (args.operator,)
     implementations = (

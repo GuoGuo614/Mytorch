@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mytorch.data import Dataset
+from kernelleaf.data import Dataset
 from .manifest import validate_record
 
 

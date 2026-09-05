@@ -5,14 +5,14 @@ import sys
 import numpy as np
 import pytest
 
-import mytorch as mt
+import kernelleaf as kl
 
 
-TRITON_CUDA = mt.is_cuda_available() and importlib.util.find_spec("triton") is not None
+TRITON_CUDA = kl.is_cuda_available() and importlib.util.find_spec("triton") is not None
 
 
 def _tensor(value, device, requires_grad=True):
-    return mt.Tensor(value, device=device, requires_grad=requires_grad)
+    return kl.Tensor(value, device=device, requires_grad=requires_grad)
 
 
 def _output_width(operation, shape):
@@ -21,7 +21,7 @@ def _output_width(operation, shape):
 
 def _run(operation, implementation, shape, dtype):
     rng = np.random.default_rng(120 + sum(shape))
-    device = mt.cuda(0)
+    device = kl.cuda(0)
     x = _tensor(rng.normal(size=shape).astype(dtype), device)
     output_shape = shape[:-1] + (_output_width(operation, shape),)
     upstream_values = rng.normal(size=output_shape).astype(dtype)
@@ -30,19 +30,19 @@ def _run(operation, implementation, shape, dtype):
         output_width = _output_width(operation, shape)
         weight = _tensor(rng.normal(size=(shape[-1], output_width)).astype(dtype), device)
         bias = _tensor(rng.normal(size=(1, output_width)).astype(dtype), device)
-        op = mt.ops.Linear(implementation)
+        op = kl.ops.Linear(implementation)
         inputs = (x, weight, bias)
     elif operation == "softmax":
-        op = mt.ops.Softmax(-1, implementation)
+        op = kl.ops.Softmax(-1, implementation)
         inputs = (x,)
     elif operation == "layernorm":
         weight = _tensor(rng.normal(size=(shape[-1],)).astype(dtype), device)
         bias = _tensor(rng.normal(size=(shape[-1],)).astype(dtype), device)
-        op = mt.ops.LayerNorm(1e-5, implementation)
+        op = kl.ops.LayerNorm(1e-5, implementation)
         inputs = (x, weight, bias)
     else:
         weight = _tensor(rng.normal(size=(shape[-1],)).astype(dtype), device)
-        op = mt.ops.RMSNorm(1e-5, implementation)
+        op = kl.ops.RMSNorm(1e-5, implementation)
         inputs = (x, weight)
 
     output = op(*inputs)
@@ -63,9 +63,9 @@ def test_cpu_import_and_auto_dispatch_do_not_load_optional_runtimes():
     script = """
 import sys
 import numpy as np
-import mytorch as mt
-x = mt.Tensor(np.ones((2, 3), dtype=np.float32))
-assert mt.ops.Softmax(implementation='auto')(x).shape == (2, 3)
+import kernelleaf as kl
+x = kl.Tensor(np.ones((2, 3), dtype=np.float32))
+assert kl.ops.Softmax(implementation='auto')(x).shape == (2, 3)
 assert 'cupy' not in sys.modules
 assert 'triton' not in sys.modules
 assert 'torch' not in sys.modules
@@ -74,21 +74,21 @@ assert 'torch' not in sys.modules
 
 
 def test_cpu_auto_uses_eager_and_forced_triton_is_clear():
-    x = mt.Tensor(np.arange(12, dtype=np.float32).reshape(3, 4))
-    operation = mt.ops.Softmax(implementation="auto")
+    x = kl.Tensor(np.arange(12, dtype=np.float32).reshape(3, 4))
+    operation = kl.ops.Softmax(implementation="auto")
     operation(x)
     assert operation.selected_implementation == "eager"
     with pytest.raises(RuntimeError, match="requires CUDA arrays"):
-        mt.ops.softmax(x, implementation="triton")
+        kl.ops.softmax(x, implementation="triton")
 
 
 def test_public_modules_expose_dispatch_and_norm_shapes_on_cpu():
-    x = mt.Tensor(np.arange(24, dtype=np.float32).reshape(3, 8))
+    x = kl.Tensor(np.arange(24, dtype=np.float32).reshape(3, 8))
     modules = (
-        mt.nn.Linear(8, 5, implementation="auto"),
-        mt.nn.Softmax(implementation="auto"),
-        mt.nn.LayerNorm(8, implementation="auto"),
-        mt.nn.RMSNorm(8, implementation="auto"),
+        kl.nn.Linear(8, 5, implementation="auto"),
+        kl.nn.Softmax(implementation="auto"),
+        kl.nn.LayerNorm(8, implementation="auto"),
+        kl.nn.RMSNorm(8, implementation="auto"),
     )
     assert modules[0](x).shape == (3, 5)
     for module in modules[1:]:
@@ -122,9 +122,9 @@ def test_triton_execution_has_no_torch_runtime_dependency():
     script = """
 import sys
 import numpy as np
-import mytorch as mt
-x = mt.Tensor(np.ones((2, 17), dtype=np.float32), device=mt.cuda(0))
-mt.ops.softmax(x, implementation='triton').numpy()
+import kernelleaf as kl
+x = kl.Tensor(np.ones((2, 17), dtype=np.float32), device=kl.cuda(0))
+kl.ops.softmax(x, implementation='triton').numpy()
 assert 'torch' not in sys.modules
 """
     subprocess.run([sys.executable, "-c", script], check=True)
@@ -132,35 +132,35 @@ assert 'torch' not in sys.modules
 
 @pytest.mark.skipif(not TRITON_CUDA, reason="working CUDA/CuPy/Triton unavailable")
 def test_triton_contract_errors_and_auto_fallback():
-    device = mt.cuda(0)
-    x64 = mt.Tensor(np.ones((2, 3), dtype=np.float64), device=device)
-    operation = mt.ops.Softmax(implementation="auto")
+    device = kl.cuda(0)
+    x64 = kl.Tensor(np.ones((2, 3), dtype=np.float64), device=device)
+    operation = kl.ops.Softmax(implementation="auto")
     operation(x64)
     assert operation.selected_implementation == "eager"
     with pytest.raises(RuntimeError, match="supports float16 and float32"):
-        mt.ops.softmax(x64, implementation="triton")
+        kl.ops.softmax(x64, implementation="triton")
 
-    x = mt.Tensor(np.ones((2, 3), dtype=np.float32), device=device)
-    operation = mt.ops.Softmax(axis=0, implementation="auto")
+    x = kl.Tensor(np.ones((2, 3), dtype=np.float32), device=device)
+    operation = kl.ops.Softmax(axis=0, implementation="auto")
     operation(x)
     assert operation.selected_implementation == "eager"
     with pytest.raises(RuntimeError, match="only the last axis"):
-        mt.ops.softmax(x, axis=0, implementation="triton")
+        kl.ops.softmax(x, axis=0, implementation="triton")
 
-    noncontiguous = mt.ops.transpose(x)
+    noncontiguous = kl.ops.transpose(x)
     with pytest.raises(RuntimeError, match="requires contiguous arrays"):
-        mt.ops.softmax(noncontiguous, implementation="triton")
+        kl.ops.softmax(noncontiguous, implementation="triton")
 
-    oversized = mt.Tensor(np.ones((1, 65537), dtype=np.float32), device=device)
+    oversized = kl.Tensor(np.ones((1, 65537), dtype=np.float32), device=device)
     with pytest.raises(RuntimeError, match="fused block limit"):
-        mt.ops.softmax(oversized, implementation="triton")
+        kl.ops.softmax(oversized, implementation="triton")
 
-    three_dimensional = mt.Tensor(
+    three_dimensional = kl.Tensor(
         np.ones((2, 3, 4), dtype=np.float32), device=device
     )
-    operation = mt.ops.Linear("auto")
-    weight = mt.Tensor(np.ones((4, 5), dtype=np.float32), device=device)
+    operation = kl.ops.Linear("auto")
+    weight = kl.Tensor(np.ones((4, 5), dtype=np.float32), device=device)
     operation(three_dimensional, weight)
     assert operation.selected_implementation == "eager"
     with pytest.raises(RuntimeError, match="requires ndim"):
-        mt.ops.linear(three_dimensional, weight, implementation="triton")
+        kl.ops.linear(three_dimensional, weight, implementation="triton")

@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-import mytorch as mt
-import mytorch.nn as nn
+import kernelleaf as kl
+import kernelleaf.nn as nn
 
 
 def _synchronize(device):
@@ -44,7 +44,7 @@ def _measure_peak_memory(layer, inputs, device):
 def benchmark_one(args, implementation, device):
     np.random.seed(args.seed)
     batch, in_channels, height, width = args.shape
-    inputs = mt.Tensor(
+    inputs = kl.Tensor(
         np.random.randn(batch, in_channels, height, width).astype(args.dtype),
         device=device,
         requires_grad=False,
@@ -115,7 +115,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
     args.shape = tuple(args.shape)
-    device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
+    device = kl.cuda(0) if args.device == "cuda" else kl.cpu()
     implementations = (("naive", "im2col", "triton")
                        if args.implementation == "all" and device.kind == "cuda"
                        else (("naive", "im2col")

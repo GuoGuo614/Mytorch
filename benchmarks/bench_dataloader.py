@@ -8,9 +8,9 @@ import time
 
 import numpy as np
 
-import mytorch as mt
-import mytorch.nn as nn
-from mytorch.data import DataLoader, Dataset
+import kernelleaf as kl
+import kernelleaf.nn as nn
+from kernelleaf.data import DataLoader, Dataset
 
 
 class SyntheticCIFAR(Dataset):
@@ -78,7 +78,7 @@ def measure_loader(args, dataset, device, workers):
 def measure_cnn_epoch(args, dataset, device, workers):
     np.random.seed(args.seed)
     model = TinyCNN(device)
-    optimizer = mt.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = kl.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.SoftmaxLoss()
     warmup_loader = make_loader(args, dataset, device, workers)
     warmup_images, warmup_labels = next(iter(warmup_loader))
@@ -132,7 +132,7 @@ def main():
     args = parser.parse_args()
     if args.samples <= 0 or args.loader_epochs <= 0:
         parser.error("samples and loader-epochs must be positive")
-    device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
+    device = kl.cuda(0) if args.device == "cuda" else kl.cpu()
     dataset = SyntheticCIFAR(args.samples, args.seed, args.delay_ms)
     common = environment(device)
     for workers in args.num_workers:

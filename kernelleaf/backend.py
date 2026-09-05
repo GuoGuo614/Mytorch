@@ -1,4 +1,4 @@
-"""Small NumPy/CuPy array backend used by MyTorch.
+"""Small NumPy/CuPy array backend used by KernelLeaf.
 
 CuPy is deliberately imported only when a CUDA-specific function is called.
 This keeps a CPU-only installation importable without optional dependencies.
@@ -50,7 +50,7 @@ def _load_cupy():
         import cupy as cp
     except ImportError as exc:
         raise RuntimeError(
-            "CUDA support requires CuPy. Install MyTorch with "
+            "CUDA support requires CuPy. Install KernelLeaf with "
             "`pip install -e '.[cuda]'`."
         ) from exc
     return cp

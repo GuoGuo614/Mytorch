@@ -1,4 +1,4 @@
-"""MyTorch V7/V8 training, collection and autonomous-driving tools."""
+"""KernelLeaf V7/V8 training, collection and autonomous-driving tools."""
 
 from .model import AutoDriveResNet
 

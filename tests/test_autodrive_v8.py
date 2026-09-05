@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-import mytorch as mt
+import kernelleaf as kl
 from apps.autodrive.audit import audit_sources, group_split
 from apps.autodrive.collect import ManualControl, collect, count_collected_images
 from apps.autodrive.config import CollectionConfig, MAP_ENVS, map_set_slug
@@ -164,12 +164,12 @@ def test_map_names_determine_default_weight_filename(tmp_path):
 @pytest.mark.parametrize('head', ['steering', 'throttle'])
 @pytest.mark.parametrize('device_name', ['cpu', 'cuda'])
 def test_gradcam_matches_head_gradient_and_restores_state(head, device_name):
-    if device_name == 'cuda' and not mt.is_cuda_available():
+    if device_name == 'cuda' and not kl.is_cuda_available():
         pytest.skip('CUDA unavailable')
-    device = mt.cpu() if device_name == 'cpu' else mt.cuda(0)
+    device = kl.cpu() if device_name == 'cpu' else kl.cuda(0)
     np.random.seed(3)
     model = AutoDriveResNet(base_channels=2, device=device)
-    inputs = mt.Tensor(np.random.default_rng(5).normal(size=(1, 3, 16, 24)).astype('float32'),
+    inputs = kl.Tensor(np.random.default_rng(5).normal(size=(1, 3, 16, 24)).astype('float32'),
                        device=device, requires_grad=True)
     model.eval()
     features = model.forward_features(inputs)

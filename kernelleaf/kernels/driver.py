@@ -1,7 +1,7 @@
 """CuPy-backed Triton driver registration.
 
 Triton's stock CUDA driver obtains the active device and stream through
-PyTorch.  MyTorch must not acquire a hidden PyTorch runtime dependency, so
+PyTorch.  KernelLeaf must not acquire a hidden PyTorch runtime dependency, so
 this module supplies the same small driver contract from CuPy instead.
 """
 

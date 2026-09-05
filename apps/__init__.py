@@ -1,1 +1,1 @@
-"""Runnable examples for the canonical MyTorch package."""
+"""Runnable examples for the canonical KernelLeaf package."""

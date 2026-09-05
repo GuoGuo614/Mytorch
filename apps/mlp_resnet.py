@@ -4,10 +4,10 @@ from pathlib import Path
 
 import numpy as np
 
-import mytorch as torch
-import mytorch.nn as nn
-from mytorch.data import DataLoader
-from mytorch.data.datasets import MNISTDataset
+import kernelleaf as kl
+import kernelleaf.nn as nn
+from kernelleaf.data import DataLoader
+from kernelleaf.data.datasets import MNISTDataset
 
 
 def ResidualBlock(dim, hidden_dim, norm=nn.BatchNorm1d, drop_prob=0.1,
@@ -62,7 +62,7 @@ def epoch(dataloader, model, opt=None):
         if opt is not None:
             loss.backward()
             opt.step()
-        predictions = torch.ops.argmax(logits, axis=1).numpy()
+        predictions = kl.ops.argmax(logits, axis=1).numpy()
         labels_numpy = labels.numpy()
         total_errors += int(np.sum(predictions != labels_numpy))
         total_loss += float(loss.numpy()) * inputs.shape[0]
@@ -73,7 +73,7 @@ def epoch(dataloader, model, opt=None):
 def train_mnist(
     batch_size=128,
     epochs=5,
-    optimizer=torch.optim.Adam,
+    optimizer=kl.optim.Adam,
     lr=0.001,
     weight_decay=0.0001,
     hidden_dim=100,
@@ -81,7 +81,7 @@ def train_mnist(
     device=None,
 ):
     np.random.seed(4)
-    device = torch.cpu() if device is None else device
+    device = kl.cpu() if device is None else device
     data_dir = (
         Path(__file__).resolve().parents[1] / "data" / "MNIST" / "raw"
         if data_dir is None else Path(data_dir)

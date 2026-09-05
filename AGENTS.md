@@ -1,10 +1,10 @@
-# MyTorch maintenance rules
+# KernelLeaf maintenance rules
 
-- `mytorch/` is the only canonical framework. The previous Needle framework
-  was removed after V0 and must not be reintroduced or mixed into MyTorch.
+- `kernelleaf/` is the only canonical framework. The previous Needle framework
+  was removed after V0 and must not be reintroduced or mixed into KernelLeaf.
 - Preserve the small `TensorOp.compute` / `TensorOp.gradient` automatic
   differentiation architecture. Do not replace it with grad-function closures.
-- Work through `MyTorch_refactor.md` in order and implement only
+- Work through `KernelLeaf_refactor.md` in order and implement only
   the version explicitly requested by the user. Current repository structure
   takes precedence where the historical assumptions in that document conflict.
 - NumPy CPU must always work. CuPy, Triton, and NCCL are optional and must be

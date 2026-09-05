@@ -2,7 +2,7 @@
 
 ## Canonical framework
 
-`mytorch/` is the maintained framework. It contains the TensorOp computation
+`kernelleaf/` is the maintained framework. It contains the TensorOp computation
 graph, automatic differentiation, NumPy/CuPy device layer, operators, neural
 network modules, optimizers, and data utilities. Root-level applications import
 only this package.
@@ -20,7 +20,7 @@ without a PyTorch or DLPack bridge.
 
 The previous Needle homework implementation and its custom C++/CUDA NDArray
 backend were removed after V0. They were useful only as migration references;
-their history remains available in Git. MyTorch must keep one computation graph
+their history remains available in Git. KernelLeaf must keep one computation graph
 and must not copy the old Needle autograd system back into the runtime.
 
 ## Existing tracked data

@@ -35,7 +35,7 @@ def triton_support_reason(arrays, *, operation, dimensions=None,
     if any(device_of(array).kind != "cuda" for array in arrays):
         return f"{operation} Triton path requires CUDA arrays"
     if not is_triton_available():
-        return "Triton is not installed; install MyTorch with the triton extra"
+        return "Triton is not installed; install KernelLeaf with the triton extra"
     first_device = device_of(arrays[0])
     if any(device_of(array) != first_device for array in arrays[1:]):
         return f"{operation} arrays must be on the same CUDA device"

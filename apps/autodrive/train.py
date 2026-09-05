@@ -1,4 +1,4 @@
-"""Train the V7 MyTorch dual-head AutoDrive ResNet."""
+"""Train the V7 KernelLeaf dual-head AutoDrive ResNet."""
 
 import argparse
 import json
@@ -7,9 +7,9 @@ import time
 
 import numpy as np
 
-import mytorch as mt
-import mytorch.nn as nn
-from mytorch.data import DataLoader
+import kernelleaf as kl
+import kernelleaf.nn as nn
+from kernelleaf.data import DataLoader
 
 from .dataset import AutoDriveDataset, DEFAULT_MEAN, DEFAULT_STD
 from .model import AutoDriveResNet
@@ -159,9 +159,9 @@ def main():
     args.maps = selected_manifest_maps(args.manifest, args.maps)
     if args.checkpoint is None:
         args.checkpoint = str(default_checkpoint_path(args.maps))
-    device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
+    device = kl.cuda(0) if args.device == "cuda" else kl.cpu()
     image_size = (args.image_height, args.image_width)
-    resume_info = mt.inspect_checkpoint(args.checkpoint) if args.resume else None
+    resume_info = kl.inspect_checkpoint(args.checkpoint) if args.resume else None
     normalization = (
         resume_info["normalization"] if resume_info is not None else {}
     )
@@ -205,12 +205,12 @@ def main():
         throttle_max=args.throttle_max,
         device=device,
     )
-    optimizer = mt.optim.Adam(
+    optimizer = kl.optim.Adam(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
     start_epoch = 1
     if args.resume:
-        metadata = mt.load_checkpoint(
+        metadata = kl.load_checkpoint(
             args.checkpoint, model, optimizer=optimizer
         )
         saved = metadata["config"]
@@ -237,7 +237,7 @@ def main():
             "val": validation,
         }
         print(json.dumps(record, sort_keys=True))
-        mt.save_checkpoint(
+        kl.save_checkpoint(
             args.checkpoint,
             model,
             optimizer,

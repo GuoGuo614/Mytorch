@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-import mytorch as mt
+import kernelleaf as kl
 from apps.autodrive.artifacts import (
     build_inference_config,
     load_inference_config,
@@ -32,7 +32,7 @@ def _artifacts(tmp_path, *, checkpoint_config=None):
     model = AutoDriveResNet(
         base_channels=2, throttle_min=0.1, throttle_max=0.5
     )
-    mt.save_checkpoint(
+    kl.save_checkpoint(
         checkpoint,
         model,
         epoch=4,
@@ -63,7 +63,7 @@ def test_inference_json_roundtrip_and_relative_checkpoint(tmp_path):
 
 def test_policy_loads_json_npz_and_predicts_bounded_smoothed_controls(tmp_path):
     config_path, _, _ = _artifacts(tmp_path)
-    policy = AutoDrivePolicy(config_path, device=mt.cpu())
+    policy = AutoDrivePolicy(config_path, device=kl.cpu())
     frame = np.full((120, 160, 3), 127, dtype=np.uint8)
     first = policy.predict(frame)
     second = policy.predict(frame)
@@ -204,10 +204,10 @@ def test_closed_loop_uses_safe_action_and_stops_after_repeated_failures():
         np.testing.assert_array_equal(action, [0.0, 0.0])
 
 
-@pytest.mark.skipif(not mt.is_cuda_available(), reason="CUDA is unavailable")
+@pytest.mark.skipif(not kl.is_cuda_available(), reason="CUDA is unavailable")
 def test_policy_loads_checkpoint_and_predicts_on_cuda(tmp_path):
     config_path, _, _ = _artifacts(tmp_path)
-    device = mt.cuda(0)
+    device = kl.cuda(0)
     policy = AutoDrivePolicy(config_path, device=device)
     action = policy.predict(np.zeros((120, 160, 3), dtype=np.uint8))
     device.xp.cuda.get_current_stream().synchronize()

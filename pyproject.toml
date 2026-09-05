@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mytorch-edu"
+name = "kernelleaf"
 version = "0.1.0"
-description = "A small TensorOp-based deep learning framework for teaching"
+description = "KernelLeaf: a small TensorOp-based deep learning framework for teaching"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -30,7 +30,7 @@ collection = ["pygame>=2", "Pillow>=9"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["mytorch*"]
+include = ["kernelleaf*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,6 +1,6 @@
 # V4 fused operators
 
-MyTorch V4 adds optional Triton forward kernels for `Linear`, `Softmax`,
+KernelLeaf V4 adds optional Triton forward kernels for `Linear`, `Softmax`,
 `LayerNorm`, and `RMSNorm`. Their public APIs accept
 `implementation="auto" | "eager" | "triton"`.
 

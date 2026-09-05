@@ -1,1 +1,1 @@
-"""MyTorch benchmarks."""
+"""KernelLeaf benchmarks."""

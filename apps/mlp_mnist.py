@@ -1,7 +1,7 @@
-import mytorch as torch
-import mytorch.nn as nn
-from mytorch.data import DataLoader
-from mytorch.data.datasets import MNISTDataset
+import kernelleaf as kl
+import kernelleaf.nn as nn
+from kernelleaf.data import DataLoader
+from kernelleaf.data.datasets import MNISTDataset
 import numpy as np
 import argparse
 from pathlib import Path
@@ -70,7 +70,7 @@ def train(args, model, train_loader, optimizer, epoch):
         optimizer.step()
 
         # 统计训练准确率
-        pred = torch.ops.argmax(output, axis=1)
+        pred = kl.ops.argmax(output, axis=1)
         pred_numpy = pred.numpy()
         target_numpy = target.numpy()
         correct = np.sum(pred_numpy == target_numpy)
@@ -99,7 +99,7 @@ def test(model, test_loader):
     for data, target in test_loader:
         output = model(data)
         test_loss += loss_fn(output, target).numpy() * data.shape[0]
-        pred = torch.ops.argmax(output, axis=1)
+        pred = kl.ops.argmax(output, axis=1)
         pred_numpy = pred.numpy()
         target_numpy = target.numpy()
         correct += np.sum(pred_numpy == target_numpy)
@@ -114,7 +114,7 @@ def test(model, test_loader):
 def main():
     """主函数"""
     # Training settings
-    parser = argparse.ArgumentParser(description='MyTorch MLP MNIST Example')
+    parser = argparse.ArgumentParser(description='KernelLeaf MLP MNIST Example')
     parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 128)')
     parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
@@ -147,7 +147,7 @@ def main():
     args = parser.parse_args()
 
     np.random.seed(args.seed)
-    device = torch.cuda(0) if args.device == 'cuda' else torch.cpu()
+    device = kl.cuda(0) if args.device == 'cuda' else kl.cpu()
 
     # 加载数据集
     print("Loading MNIST dataset...")
@@ -186,7 +186,7 @@ def main():
 
     # 统计模型参数量
     num_params = sum(p.numpy().size for p in model.parameters())
-    optimizer_type = torch.optim.Adam if args.optimizer == 'adam' else torch.optim.SGD
+    optimizer_type = kl.optim.Adam if args.optimizer == 'adam' else kl.optim.SGD
     optimizer = optimizer_type(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
@@ -220,7 +220,7 @@ def main():
     print("="*80)
 
     # 初始化loss记录文件
-    with open('mytorch_mlp_loss.txt', 'w') as f:
+    with open('kernelleaf_mlp_loss.txt', 'w') as f:
         f.write("epoch\ttrain_loss\ttest_loss\n")
 
     # 训练循环
@@ -250,7 +250,7 @@ def main():
         )
 
         # 保存loss到文件
-        with open('mytorch_mlp_loss.txt', 'a') as f:
+        with open('kernelleaf_mlp_loss.txt', 'a') as f:
             f.write(f"{epoch}\t{train_loss:.6f}\t{test_loss:.6f}\n")
 
     total_time = total_timer.elapsed()
@@ -270,7 +270,7 @@ def main():
     print("="*80)
 
     if args.save_model:
-        print("Model saving not implemented in MyTorch")
+        print("Model saving not implemented in KernelLeaf")
 
 
 if __name__ == '__main__':

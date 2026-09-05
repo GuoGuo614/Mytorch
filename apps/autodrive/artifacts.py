@@ -1,4 +1,4 @@
-"""JSON inference sidecars paired with MyTorch NPZ checkpoints."""
+"""JSON inference sidecars paired with KernelLeaf NPZ checkpoints."""
 
 import json
 import os

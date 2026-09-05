@@ -30,7 +30,7 @@ loaders with the same configuration produce the same order in every epoch.
 boundaries. Randomized transforms should use their own deterministic randomness
 when reproducible augmentation values—not only sample order—are required.
 
-Workers do not create MyTorch tensors or access CUDA. Tensor construction and
+Workers do not create KernelLeaf tensors or access CUDA. Tensor construction and
 host-to-device transfer happen in the main consumer thread immediately before
 a batch is returned. `pin_memory=True` lazily imports CuPy only for a CUDA
 device, copies NumPy arrays through pinned host allocations, and then transfers
@@ -45,7 +45,7 @@ access. Download `cifar-10-python.tar.gz` from
 the extracted `cifar-10-batches-py` directory or its parent as `root`.
 
 ```python
-from mytorch.data.datasets import CIFAR10Dataset
+from kernelleaf.data.datasets import CIFAR10Dataset
 
 train = CIFAR10Dataset("data/CIFAR10", train=True, transforms=[...])
 test = CIFAR10Dataset("data/CIFAR10", train=False)

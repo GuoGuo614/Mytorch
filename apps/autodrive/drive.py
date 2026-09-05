@@ -1,11 +1,11 @@
-"""Run closed-loop DonkeyCar driving from JSON + MyTorch NPZ artifacts."""
+"""Run closed-loop DonkeyCar driving from JSON + KernelLeaf NPZ artifacts."""
 
 import argparse
 import json
 
 import numpy as np
 
-import mytorch as mt
+import kernelleaf as kl
 
 from .artifacts import load_inference_config
 from .dataset import preprocess_rgb_frame
@@ -18,7 +18,7 @@ class AutoDrivePolicy:
 
     def __init__(self, config_path, *, checkpoint=None, device=None):
         self.config = load_inference_config(config_path)
-        self.device = device or mt.cpu()
+        self.device = device or kl.cpu()
         model_config = self.config["model"]
         self.model = AutoDriveResNet(
             base_channels=model_config["base_channels"],
@@ -28,7 +28,7 @@ class AutoDrivePolicy:
             device=self.device,
         )
         self.checkpoint = checkpoint or self.config["checkpoint"]
-        self.checkpoint_metadata = mt.load_checkpoint(
+        self.checkpoint_metadata = kl.load_checkpoint(
             self.checkpoint, self.model
         )
         saved_model = self.checkpoint_metadata.get("config", {})
@@ -68,7 +68,7 @@ class AutoDrivePolicy:
             self.preprocessing["mean"],
             self.preprocessing["std"],
         )
-        inputs = mt.Tensor(
+        inputs = kl.Tensor(
             values[None, ...], device=self.device, requires_grad=False
         )
         steering_tensor, throttle_tensor = self.model(inputs)
@@ -252,7 +252,7 @@ def main():
     parser.add_argument("--max-steps", type=int, default=6000)
     parser.add_argument("--log-interval", type=int, default=50)
     args = parser.parse_args()
-    device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
+    device = kl.cuda(0) if args.device == "cuda" else kl.cpu()
     policy = AutoDrivePolicy(
         args.config, checkpoint=args.checkpoint, device=device
     )

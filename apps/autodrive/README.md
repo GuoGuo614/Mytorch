@@ -1,6 +1,6 @@
-# MyTorch 自动驾驶使用说明
+# KernelLeaf 自动驾驶使用说明
 
-`apps/autodrive` 是基于 MyTorch 的自动驾驶应用，包含旧数据转换、模拟器
+`apps/autodrive` 是基于 KernelLeaf 的自动驾驶应用，包含旧数据转换、模拟器
 数据采集、数据检查、模型训练、断点续训、评估、闭环自动驾驶和 Grad-CAM。
 
 模型使用轻量 ResNet 主干，同时输出：
@@ -8,7 +8,7 @@
 - `steering`：转向，范围为 `[-1, 1]`；
 - `throttle`：油门，默认范围为 `[0, 1]`。
 
-`apps/auto-drive(paddle)` 仅作为 Paddle 参考实现，不参与 MyTorch 训练和推理。
+`apps/auto-drive(paddle)` 仅作为 Paddle 参考实现，不参与 KernelLeaf 训练和推理。
 
 ## 1. 环境安装
 
@@ -116,7 +116,7 @@ Get-ChildItem "data/DonkeyCar/collected/warren-track" -Directory |
 确认 UUID 后删除准确目录：
 
 ```powershell
-Remove-Item -LiteralPath "C:\code\Mytorch\data\DonkeyCar\collected\warren-track\warren-track_具体UUID" -Recurse -Force
+Remove-Item -LiteralPath "C:\code\KernelLeaf\data\DonkeyCar\collected\warren-track\warren-track_具体UUID" -Recurse -Force
 ```
 
 如果已经生成训练 manifest，删除原始 run 后必须重新执行数据检查和导出。
