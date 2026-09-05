@@ -10,6 +10,7 @@ import mytorch as mt
 from .artifacts import load_inference_config
 from .dataset import preprocess_rgb_frame
 from .model import AutoDriveResNet
+from .config import add_simulator_arguments, environment_name
 
 
 class AutoDrivePolicy:
@@ -244,10 +245,10 @@ class ClosedLoopDriver:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="checkpoints/autodrive_v7.json")
+    parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
-    parser.add_argument("--env-name", default="donkey-mountain-track-v0")
+    add_simulator_arguments(parser)
     parser.add_argument("--max-steps", type=int, default=6000)
     parser.add_argument("--log-interval", type=int, default=50)
     args = parser.parse_args()
@@ -255,7 +256,7 @@ def main():
     policy = AutoDrivePolicy(
         args.config, checkpoint=args.checkpoint, device=device
     )
-    adapter = GymDonkeyAdapter(args.env_name)
+    adapter = GymDonkeyAdapter(environment_name(args))
     statistics = ClosedLoopDriver(
         adapter, policy, max_steps=args.max_steps,
         log_interval=args.log_interval,

@@ -1,4 +1,4 @@
-"""MyTorch V7 dual-head autonomous-driving training package."""
+"""MyTorch V7/V8 training, collection and autonomous-driving tools."""
 
 from .model import AutoDriveResNet
 

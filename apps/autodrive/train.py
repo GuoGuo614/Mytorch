@@ -14,6 +14,7 @@ from mytorch.data import DataLoader
 from .dataset import AutoDriveDataset, DEFAULT_MEAN, DEFAULT_STD
 from .model import AutoDriveResNet
 from .artifacts import build_inference_config, save_inference_config
+from .config import map_set_slug
 
 
 def mse_loss(prediction, target):
@@ -81,6 +82,29 @@ def evaluate_model(model, loader, lambda_throttle=1.0):
             "samples": samples}
 
 
+def selected_manifest_maps(manifest_path, requested=None):
+    available = set()
+    with Path(manifest_path).open("r", encoding="utf-8") as file:
+        for line in file:
+            if line.strip():
+                record = json.loads(line)
+                if "map_name" in record:
+                    available.add(record["map_name"])
+    selected = available if requested is None else set(requested)
+    unknown = sorted(selected - available)
+    if unknown:
+        raise ValueError(
+            f"unknown maps {unknown}; available maps: {sorted(available)}"
+        )
+    if not selected:
+        raise ValueError("manifest contains no map names")
+    return sorted(selected)
+
+
+def default_checkpoint_path(map_names):
+    return Path("checkpoints") / f"autodrive_{map_set_slug(map_names)}.npz"
+
+
 def _configuration(args):
     return {
         "manifest": str(args.manifest),
@@ -119,7 +143,10 @@ def main():
         "--maps", nargs="+", default=None,
         help="manifest map names to train; omitted means all maps",
     )
-    parser.add_argument("--checkpoint", default="checkpoints/autodrive_v7.npz")
+    parser.add_argument(
+        "--checkpoint", default=None,
+        help="output NPZ; defaults to checkpoints/autodrive_<maps>.npz",
+    )
     parser.add_argument(
         "--run-config", default=None,
         help="JSON inference config; defaults to the checkpoint path with .json",
@@ -129,6 +156,9 @@ def main():
     if args.epochs <= 0 or args.lambda_throttle < 0:
         parser.error("epochs must be positive and lambda-throttle non-negative")
     np.random.seed(args.seed)
+    args.maps = selected_manifest_maps(args.manifest, args.maps)
+    if args.checkpoint is None:
+        args.checkpoint = str(default_checkpoint_path(args.maps))
     device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
     image_size = (args.image_height, args.image_width)
     resume_info = mt.inspect_checkpoint(args.checkpoint) if args.resume else None

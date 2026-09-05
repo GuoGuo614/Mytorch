@@ -8,13 +8,18 @@ from mytorch.data import DataLoader
 
 from .dataset import AutoDriveDataset
 from .model import AutoDriveResNet
-from .train import evaluate_model
+from .train import (
+    default_checkpoint_path, evaluate_model, selected_manifest_maps,
+)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", default="data/DonkeyCar/manifest.jsonl")
-    parser.add_argument("--checkpoint", default="checkpoints/autodrive_v7.npz")
+    parser.add_argument(
+        "--checkpoint", default=None,
+        help="NPZ path; defaults to checkpoints/autodrive_<maps>.npz",
+    )
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--base-channels", type=int, default=16)
@@ -29,6 +34,9 @@ def main():
         help="map names to evaluate; defaults to the checkpoint map set",
     )
     args = parser.parse_args()
+    selected_maps = selected_manifest_maps(args.manifest, args.maps)
+    if args.checkpoint is None:
+        args.checkpoint = str(default_checkpoint_path(selected_maps))
     device = mt.cuda(0) if args.device == "cuda" else mt.cpu()
     checkpoint = mt.inspect_checkpoint(args.checkpoint)
     config = checkpoint["config"]

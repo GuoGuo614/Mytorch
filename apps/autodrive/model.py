@@ -88,7 +88,10 @@ class AutoDriveResNet(nn.Module):
         return self.stage3(values)
 
     def forward(self, inputs):
-        features = self.pool(self.forward_features(inputs))
+        return self.forward_heads(self.forward_features(inputs))
+
+    def forward_heads(self, features):
+        features = self.pool(features)
         features = features.reshape((features.shape[0], features.shape[1]))
         steering = nn.Tanh()(self.steering_head(features))
         throttle_unit = nn.Sigmoid()(self.throttle_head(features))
